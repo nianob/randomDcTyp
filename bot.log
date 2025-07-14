@@ -1,0 +1,271 @@
+2025-07-13 13:26:02,104 [INFO] Shard ID None has successfully RESUMED session 5d16553115f47dcd0d40b28f76db6b32.
+2025-07-13 17:17:57,818 [INFO] Shard ID None has successfully RESUMED session 5d16553115f47dcd0d40b28f76db6b32.
+2025-07-13 18:20:58,488 [INFO] Shard ID None has successfully RESUMED session 5d16553115f47dcd0d40b28f76db6b32.
+2025-07-13 20:00:37,564 [INFO] Shard ID None has successfully RESUMED session 5d16553115f47dcd0d40b28f76db6b32.
+2025-07-13 20:21:48,007 [ERROR] Ignoring exception in command 'best'
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 841, in _do_call
+    return await self._callback(self.binding, interaction, **params)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 269, in best
+    @discord.app_commands.command(name="info", description="Get information about VC-Points")
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/interactions.py", line 638, in defer
+    await adapter.create_interaction_response(
+  File "/usr/lib/python3/dist-packages/discord/webhook/async_.py", line 219, in request
+    raise NotFound(response, data)
+discord.errors.NotFound: 404 Not Found (error code: 10062): Unknown interaction
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1248, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 867, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 860, in _do_call
+    raise CommandInvokeError(self, e) from e
+discord.app_commands.errors.CommandInvokeError: Command 'best' raised an exception: NotFound: 404 Not Found (error code: 10062): Unknown interaction
+2025-07-13 20:25:14,787 [INFO] logging in using static token
+2025-07-13 20:25:16,268 [INFO] Shard ID None has connected to Gateway (Session ID: f36b461b79bfd7f9fcc2e635e6aae4b4).
+2025-07-13 20:25:18,989 [ERROR] Ignoring exception in on_ready
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/client.py", line 441, in _run_event
+    await coro(*args, **kwargs)
+  File "/home/nianob/discord/bot.py", line 82, in on_ready
+    await vc.finish_init()
+  File "/home/nianob/discord/vc.py", line 366, in finish_init
+    shops[uid] = Shop(storage["shops"][uid], user)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 236, in __init__
+    self.sell_slots: int = json["sell_slots"]
+                           ~~~~^^^^^^^^^^^^^^
+KeyError: 'sell_slots'
+2025-07-13 20:26:13,338 [INFO] logging in using static token
+2025-07-13 20:26:14,416 [INFO] Shard ID None has connected to Gateway (Session ID: cc155199c463ba2e49fd2c58ce9673cd).
+2025-07-13 20:26:18,003 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 20:26:42,554 [ERROR] Ignoring exception in command tree
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'vc' not found
+2025-07-13 20:26:42,554 [ERROR] Ignoring exception in command 'myshop'
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 841, in _do_call
+    return await self._callback(self.binding, interaction, **params)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 337, in myshop
+    message, view = shop.menu(interaction, True)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 248, in menu
+    view.add_item(Shop.EditShopButton(self, orig_interaction))
+  File "/usr/lib/python3/dist-packages/discord/ui/view.py", line 326, in add_item
+    self.__weights.add_item(item)
+  File "/usr/lib/python3/dist-packages/discord/ui/view.py", line 109, in add_item
+    if item.row is not None:
+       ^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/ui/item.py", line 103, in row
+    return self._row
+           ^^^^^^^^^
+AttributeError: 'EditShopButton' object has no attribute '_row'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1248, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 867, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 860, in _do_call
+    raise CommandInvokeError(self, e) from e
+discord.app_commands.errors.CommandInvokeError: Command 'myshop' raised an exception: AttributeError: 'EditShopButton' object has no attribute '_row'
+2025-07-13 20:28:25,116 [INFO] logging in using static token
+2025-07-13 20:28:26,590 [INFO] Shard ID None has connected to Gateway (Session ID: b1edf6ebe25e4cea71d8103492a5e7c9).
+2025-07-13 20:28:30,782 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 20:28:45,797 [ERROR] Ignoring exception in command tree
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'vc' not found
+2025-07-13 20:28:45,800 [ERROR] Ignoring exception in command 'myshop'
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 841, in _do_call
+    return await self._callback(self.binding, interaction, **params)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 337, in myshop
+    return
+           
+  File "/home/nianob/discord/vc.py", line 248, in menu
+    if edit:
+        ^^^^^
+  File "/usr/lib/python3/dist-packages/discord/ui/view.py", line 326, in add_item
+    self.__weights.add_item(item)
+  File "/usr/lib/python3/dist-packages/discord/ui/view.py", line 109, in add_item
+    if item.row is not None:
+       ^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/ui/item.py", line 103, in row
+    return self._row
+           ^^^^^^^^^
+AttributeError: 'EditShopButton' object has no attribute '_row'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1248, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 867, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 860, in _do_call
+    raise CommandInvokeError(self, e) from e
+discord.app_commands.errors.CommandInvokeError: Command 'myshop' raised an exception: AttributeError: 'EditShopButton' object has no attribute '_row'
+2025-07-13 20:39:03,940 [INFO] logging in using static token
+2025-07-13 20:39:05,085 [INFO] Shard ID None has connected to Gateway (Session ID: 042c0501b5a9a30fb2b0832fa015e958).
+2025-07-13 20:39:08,938 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 21:57:34,031 [INFO] logging in using static token
+2025-07-13 21:57:35,363 [INFO] Shard ID None has connected to Gateway (Session ID: 7eafe6d0f505ca54938a5fc53a7c55c5).
+2025-07-13 21:57:39,076 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 21:58:42,783 [INFO] Exiting.
+2025-07-13 21:58:44,495 [INFO] logging in using static token
+2025-07-13 21:58:45,695 [INFO] Shard ID None has connected to Gateway (Session ID: 6d2ef10a4073621073da06fed310adc8).
+2025-07-13 21:58:49,304 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 21:58:55,967 [ERROR] Ignoring exception in command 'myshop'
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 841, in _do_call
+    return await self._callback(self.binding, interaction, **params)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 369, in myshop
+    message, view = shop.menu(interaction, True)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 278, in menu
+    view.add_item(Shop.BuySlotButton(self, orig_interaction))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nianob/discord/vc.py", line 209, in __init__
+    super().__init__(style=discord.ButtonStyle.primary, label=f"Buy Extra Slot ({self.cost} VC-Points)", disabled=storage["vc_points"][str(self.shop.owner)] < self.cost)
+                                                                                                                  ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'nianob#0'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1248, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 867, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/commands.py", line 860, in _do_call
+    raise CommandInvokeError(self, e) from e
+discord.app_commands.errors.CommandInvokeError: Command 'myshop' raised an exception: KeyError: 'nianob#0'
+2025-07-13 21:59:48,351 [INFO] Exiting.
+2025-07-13 21:59:50,482 [INFO] logging in using static token
+2025-07-13 21:59:51,692 [INFO] Shard ID None has connected to Gateway (Session ID: ba8247f14feb534762dc95028d5c9f6e).
+2025-07-13 21:59:55,344 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 22:06:29,171 [INFO] Exiting.
+2025-07-13 22:06:31,355 [INFO] logging in using static token
+2025-07-13 22:06:32,649 [INFO] Shard ID None has connected to Gateway (Session ID: 13bc360aee2af23cb02b840b2d4b1d0c).
+2025-07-13 22:06:36,445 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 22:09:24,206 [INFO] Exiting.
+2025-07-13 22:09:26,895 [INFO] logging in using static token
+2025-07-13 22:09:27,962 [INFO] Shard ID None has connected to Gateway (Session ID: 58097d21d3383f88a2e669d786bf9eae).
+2025-07-13 22:09:31,589 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 22:11:03,360 [INFO] Exiting.
+2025-07-13 22:11:05,207 [INFO] logging in using static token
+2025-07-13 22:11:06,328 [INFO] Shard ID None has connected to Gateway (Session ID: eaa5fdb9b1d3b4153623facce451cec6).
+2025-07-13 22:11:10,144 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-13 22:14:42,596 [INFO] Exiting.
+2025-07-13 22:14:45,179 [INFO] logging in using static token
+2025-07-13 22:14:46,545 [INFO] Shard ID None has connected to Gateway (Session ID: 8cddc6e605d7607692ab63eec2822c0f).
+2025-07-13 22:14:50,170 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 00:21:27,243 [INFO] logging in using static token
+2025-07-14 00:21:28,400 [INFO] Shard ID None has connected to Gateway (Session ID: 7cfd4060eebb0576f4781ed4bcd97e21).
+2025-07-14 00:21:30,452 [ERROR] Ignoring exception in command tree
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'vc' not found
+2025-07-14 00:21:32,151 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 03:18:47,081 [INFO] Shard ID None has successfully RESUMED session 7cfd4060eebb0576f4781ed4bcd97e21.
+2025-07-14 05:47:53,623 [INFO] Shard ID None has successfully RESUMED session 7cfd4060eebb0576f4781ed4bcd97e21.
+2025-07-14 09:04:13,013 [INFO] Shard ID None has successfully RESUMED session 7cfd4060eebb0576f4781ed4bcd97e21.
+2025-07-14 10:29:47,067 [INFO] Shard ID None has successfully RESUMED session 7cfd4060eebb0576f4781ed4bcd97e21.
+2025-07-14 11:08:51,747 [INFO] Shard ID None has successfully RESUMED session 7cfd4060eebb0576f4781ed4bcd97e21.
+2025-07-14 12:29:33,774 [INFO] logging in using static token
+2025-07-14 12:29:34,912 [INFO] Shard ID None has connected to Gateway (Session ID: df320df138e2afe9473cd5a50de21a40).
+2025-07-14 12:29:38,706 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 12:30:46,502 [WARNING] Can't keep up, shard ID None websocket is 14.8s behind.
+2025-07-14 12:31:29,898 [INFO] logging in using static token
+2025-07-14 12:31:31,135 [INFO] Shard ID None has connected to Gateway (Session ID: aa06589a2670f8e4dc12ac605e034401).
+2025-07-14 12:31:33,754 [ERROR] Ignoring exception in command tree
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/discord/app_commands/tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'vc' not found
+2025-07-14 12:31:34,745 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 12:33:42,340 [INFO] logging in using static token
+2025-07-14 12:33:43,712 [INFO] Shard ID None has connected to Gateway (Session ID: b4c0aeae9ac7951446f305495e4336f0).
+2025-07-14 12:33:47,320 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:24:56,899 [INFO] logging in using static token
+2025-07-14 14:24:58,303 [INFO] Shard ID None has connected to Gateway (Session ID: 6c6c785039871a3b937db57e1125d078).
+2025-07-14 14:25:02,251 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:26:05,396 [INFO] logging in using static token
+2025-07-14 14:26:06,608 [INFO] Shard ID None has connected to Gateway (Session ID: aa0fed146ad0710c38ee04e9f97dd504).
+2025-07-14 14:26:10,435 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:26:54,936 [INFO] Exiting.
+2025-07-14 14:27:56,358 [INFO] logging in using static token
+2025-07-14 14:27:57,519 [INFO] Shard ID None has connected to Gateway (Session ID: b15c459368bb36ad5de2ed6849c68876).
+2025-07-14 14:28:01,064 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:29:46,630 [INFO] Exiting.
+2025-07-14 14:31:48,351 [INFO] logging in using static token
+2025-07-14 14:31:49,680 [INFO] Shard ID None has connected to Gateway (Session ID: 54bf972b319071fecf14418513370243).
+2025-07-14 14:31:53,439 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:32:23,446 [INFO] Exiting.
+2025-07-14 14:37:20,142 [INFO] logging in using static token
+2025-07-14 14:37:21,327 [INFO] Shard ID None has connected to Gateway (Session ID: a343059a538f0b8b994f1703d4d8d2c7).
+2025-07-14 14:37:25,283 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:39:03,618 [INFO] Exiting.
+2025-07-14 14:40:33,036 [INFO] logging in using static token
+2025-07-14 14:40:34,272 [INFO] Shard ID None has connected to Gateway (Session ID: b7d141d6a1561a3806d9e4c0f305932c).
+2025-07-14 14:40:38,060 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:41:02,284 [INFO] Exiting.
+2025-07-14 14:41:39,186 [INFO] logging in using static token
+2025-07-14 14:41:40,319 [INFO] Shard ID None has connected to Gateway (Session ID: 01c549018a942b46b04d5cbd37a15ed5).
+2025-07-14 14:41:43,926 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 14:41:43,927 [INFO] Exception in reward: '685788367002402834'
+2025-07-14 14:41:53,684 [INFO] Exiting.
+2025-07-14 14:43:15,874 [INFO] logging in using static token
+2025-07-14 14:43:17,019 [INFO] Shard ID None has connected to Gateway (Session ID: 2ceac94be47b78ca61533cd9c9307dc9).
+2025-07-14 14:43:20,905 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 15:47:44,753 [INFO] Shard ID None has successfully RESUMED session 2ceac94be47b78ca61533cd9c9307dc9.
+2025-07-14 16:06:50,397 [INFO] logging in using static token
+2025-07-14 16:06:51,648 [INFO] Shard ID None has connected to Gateway (Session ID: b2c8318389a640de9bcbc06b34d63f36).
+2025-07-14 16:06:55,362 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 16:14:42,087 [INFO] logging in using static token
+2025-07-14 16:14:43,216 [INFO] Shard ID None has connected to Gateway (Session ID: 8f72824cc786ae5725e97ad3dbdb6643).
+2025-07-14 16:14:46,929 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
+2025-07-14 16:23:52,886 [INFO] logging in using static token
+2025-07-14 16:23:54,117 [INFO] Exiting.
+2025-07-14 16:23:57,456 [INFO] logging in using static token
+2025-07-14 16:23:58,594 [INFO] Shard ID None has connected to Gateway (Session ID: 4247de54725f988ec1a506e91dd4f1ca).
+2025-07-14 16:24:02,377 [INFO] Logged in as randomDcTyp#3551 and ready to accept commands.
