@@ -472,6 +472,22 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(f":white_check_mark: Sent {user.mention} a Message, if they don't react within **3 minutes** they will me moved to AFK.", ephemeral=True)
         repoted[user.id] = time.time()
         await send_challenge(user)
+    
+    @discord.app_commands.command(name="pay", description="Pay the user the specified amount of VC-Points")
+    async def pay(self, interaction: discord.Interaction, user: discord.Member, points: int):
+        myPoints = storage["vc_points"].get(str(interaction.user.id), 0)
+        if myPoints < points:
+            await interaction.response.send_message(":x: You cannot pay someone more than you have", ephemeral=True)
+            return
+        if points < 1:
+            await interaction.response.send_message(":x: You cannot pay less than 1 point", ephemeral=True)
+            return
+        otherPoints = storage["vc_points"].get(str(user.id), 0)
+        storage["vc_points"][str(user.id)] = otherPoints + points
+        storage["vc_points"][str(interaction.user.id)] = myPoints - points
+        save_storage()
+        await user.send(f"{interaction.user.mention} just sent you {points} VC-Points!")
+        await interaction.response.send_message(f":white_check_mark: You transfered {points} VC-Points to {user.mention}.", ephemeral=True)
 
 async def reward(bot: commands.Bot):
     while True:

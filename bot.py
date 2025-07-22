@@ -113,12 +113,6 @@ async def on_ready():
         #await bot.tree.sync(guild=bt)
         bot.loop.create_task(wordle.close_idle_games())
         bot.loop.create_task(vc.reward(bot))
-        if False:
-            for uid in map(int, storage["vc_points"].keys()):
-                points = storage["vc_points"][str(uid)]
-                if points >= 100:
-                    user: discord.User = await bot.fetch_user(uid)
-                    await user.send("Hi! :wave:\nWie du wahrscheinlich schon mitbekommen hast gibt es im GGC seit genau 1 Woche ein Punktesystem. (`/vc info`)\nAb sofort gibt es auch ein Schopsystem, wo du dir mit deinen Punkten Sachen von anderen Benutzern kaufen kannst. (`/vc shop`)\nDa du mehr als 100 Punkte hast, kannst du auch selber mit `/vc myshop` so einen Shop aufmachen!")
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")
 
 @bot.event
