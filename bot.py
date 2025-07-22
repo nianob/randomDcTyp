@@ -8,6 +8,8 @@ import uno
 import wordle
 import vc
 
+nianob = 719900345383518209
+
 logging.basicConfig(
     level=logging.INFO,  # Set the logging level
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -74,15 +76,34 @@ async def logs(interaction: discord.Interaction):
     with open("bot.log", "rb") as f:
         await interaction.response.send_message("Here you go!", file=discord.File(f, "bot.log"), view=view)
 
+def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None):
+    def decorator(func):
+        class Modal(discord.ui.Modal):
+            def __init__(self):
+                super().__init__(title=title)
+                self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=True, min_length=min_length, max_length=max_length)
+                self.add_item(self.input)
+        Modal.on_submit = func
+        return Modal
+    return decorator
 
+@text_input("A", "B", "C")
+async def response(self, interaction: discord.Interaction):
+    await interaction.response.send_message(self.input.value, ephemeral=True)
+
+@discord.app_commands.command(name="test", description="just to test")
+async def test(interaction: discord.Interaction):
+    await interaction.response.send_modal(response())
 
 @bot.event
 async def on_ready():
+    global ggc
     if not bot.tree.get_command('logs'): # Bot has not initialized commands
         await vc.finish_init()
         ggc = await bot.fetch_guild(999967735326978078)
         bt = await bot.fetch_guild(1056305180699807814)
         bot.tree.add_command(logs)
+        bot.tree.add_command(test)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(vc.vcCommand(), guild=ggc)
@@ -92,6 +113,12 @@ async def on_ready():
         #await bot.tree.sync(guild=bt)
         bot.loop.create_task(wordle.close_idle_games())
         bot.loop.create_task(vc.reward(bot))
+        if False:
+            for uid in map(int, storage["vc_points"].keys()):
+                points = storage["vc_points"][str(uid)]
+                if points >= 100:
+                    user: discord.User = await bot.fetch_user(uid)
+                    await user.send("Hi! :wave:\nWie du wahrscheinlich schon mitbekommen hast gibt es im GGC seit genau 1 Woche ein Punktesystem. (`/vc info`)\nAb sofort gibt es auch ein Schopsystem, wo du dir mit deinen Punkten Sachen von anderen Benutzern kaufen kannst. (`/vc shop`)\nDa du mehr als 100 Punkte hast, kannst du auch selber mit `/vc myshop` so einen Shop aufmachen!")
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")
 
 @bot.event
@@ -114,6 +141,30 @@ async def on_message(message: discord.Message):
         return
     await wordle.ongoing[channel].handleChatMessage(message)
 
+async def was_moved_by_admin(guild: discord.Guild, member: discord.Member):
+    async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.member_move):
+        # Check if the log is very recent (within 1 second)
+        time_diff = (discord.utils.utcnow() - entry.created_at).total_seconds()
+        if time_diff < 3:
+            # If target is set, verify it's the correct member
+            if entry.target and entry.target.id == member.id:
+                return entry.user  # confirmed mover
+            # If no target, we assume it's the same user that triggered the voice update
+            return entry.user
+    return None
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    afk_channel_id = 1392955385908039701
+    guild = member.guild
+
+    # Moved out of AFK talk
+    if before.channel and after.channel and (before.channel.id == afk_channel_id) ^ (after.channel.id == afk_channel_id):
+        mover = await was_moved_by_admin(guild, member)
+        if mover and mover.id != member.id and mover.id != bot.user.id:
+            # Unauthorized move out of AFK talk
+            await member.move_to(before.channel)
+            await mover.send("Sorry, but you cannot move a user out of or into the AFK talk.")
 
 run_on_boot = True
 uno.bot = bot
@@ -123,7 +174,7 @@ vc.bot = bot
 vc.logging = logging
 
 # Start the bot
-with open("randomDcTyp_token.txt", "r") as f:
+with open("bot_token.hidden.txt", "r") as f:
     token = f.read()
 if (not "--autostarted" in sys.argv) or run_on_boot:
     bot.run(token, log_handler=None)
