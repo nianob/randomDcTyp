@@ -23,8 +23,20 @@ def save_storage():
     with open("storage.json", "w") as f:
         json.dump(storage, f)
 
-with open("storage.json", "r") as f:
-    storage = json.load(f)
+try:
+    with open("storage.json", "r") as f:
+        storage = json.load(f)
+except:
+    storage = None
+if not storage:
+    storage = {
+        "hiddenOwners": [],
+        "vc_points": {},
+        "max_vc_points": {},
+        "shops": {}
+    }
+    save_storage()
+
 
 class OwnerCommand(discord.app_commands.Group):
     def __init__(self):
@@ -46,8 +58,6 @@ class OwnerCommand(discord.app_commands.Group):
             await interaction.response.send_message(f"You have toggled on your Owner role.", ephemeral=True)
         else:
             await interaction.response.send_message(f"Spendier <@983037928529862737> einen Döner und du bekommst Owner!", ephemeral=True)
-
-
 
 # Create a bot instance
 intents = discord.Intents.default()
