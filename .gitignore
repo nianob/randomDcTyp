@@ -1,0 +1,26 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Environment files
+.env
+*.env
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Compiled C extensions
+*.so
+
+# macOS/Linux/Windows junk
+*.swp
+
+# Storage files
+bot.log
+crash.json
+storage.json
