@@ -24,3 +24,8 @@ Thumbs.db
 bot.log
 crash.json
 storage.json
+bot_token.hidden.txt
+
+# Local update files
+update.sh
+update_checker.py
