@@ -49,10 +49,10 @@ class OwnerCommand(discord.app_commands.Group):
         if ownerRole in channel.roles:
             storage["hiddenOwners"].append(channel.id)
             save_storage()
-            await channel.remove_roles(ownerRole, reason="channel toggled off Owner role")
+            await channel.remove_roles(ownerRole, reason="User toggled Owner role")
             await interaction.response.send_message(f"You have toggled off your Owner role.", ephemeral=True)
         elif channel.id in storage["hiddenOwners"]:
-            await channel.add_roles(ownerRole, reason="channel toggled on Owner role")
+            await channel.add_roles(ownerRole, reason="Uesr toggled Owner role")
             storage["hiddenOwners"].remove(channel.id)
             save_storage()
             await interaction.response.send_message(f"You have toggled on your Owner role.", ephemeral=True)
