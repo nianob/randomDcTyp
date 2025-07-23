@@ -29,3 +29,4 @@ bot_token.hidden.txt
 # Local update files
 update.sh
 update_checker.py
+bot.pid
