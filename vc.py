@@ -487,6 +487,10 @@ class vcCommand(discord.app_commands.Group):
         storage["vc_points"][str(interaction.user.id)] = myPoints - points
         save_storage()
         await user.send(f"{interaction.user.mention} just sent you {points} VC-Points!")
+        if storage["vc_points"][str(user.id)] > storage["max_vc_points"].get(str(user.id), 0):
+            storage["max_vc_points"][str(user.id)] = storage["vc_points"][str(user.id)]
+            if otherPoints < 100 and otherPoints+points >= 100:
+                await user.send(f"Hi! :wave:\nWie du wahrscheinlich schon mitgekriegt hast, gibt es auf dem GGC jetzt ein Punktesystem. (`/vc info`)\nDa du jetzt 100 VC-Punkte hast kannst du jetzt mit `/vc myshop` deinen eigenen Punkteshop eröffnen!\nAndere benutzer können dann mit `/vc shop @{user.display_name}` auf deinen Shop zugreifen.\nViel spaß mit deinen neuen möglichkeiten VC-Punkte zu verdienen!")
         await interaction.response.send_message(f":white_check_mark: You transfered {points} VC-Points to {user.mention}.", ephemeral=True)
 
 async def reward(bot: commands.Bot):
@@ -507,8 +511,8 @@ async def reward(bot: commands.Bot):
                         storage["vc_points"][str(member.id)] = points+1
                         if storage["vc_points"][str(member.id)] > storage["max_vc_points"].get(str(member.id), 0):
                             storage["max_vc_points"][str(member.id)] = storage["vc_points"][str(member.id)]
-                        if points == 99:
-                            await member.send(f"Hi! :wave:\nWie du wahrscheinlich schon mitgekriegt hast, gibt es auf dem GGC jetzt ein Punktesystem. (`/vc info`)\nDa du jetzt 100 VC-Punkte hast kannst du jetzt mit `/vc myshop` deinen eigenen Punkteshop eröffnen!\nAndere benutzer können dann mit `/vc shop @{member.display_name}` auf deinen Shop zugreifen.\nViel spaß mit deinen neuen möglichkeiten VC-Punkte zu verdienen!")
+                            if points == 99:
+                                await member.send(f"Hi! :wave:\nWie du wahrscheinlich schon mitgekriegt hast, gibt es auf dem GGC jetzt ein Punktesystem. (`/vc info`)\nDa du jetzt 100 VC-Punkte hast kannst du jetzt mit `/vc myshop` deinen eigenen Punkteshop eröffnen!\nAndere benutzer können dann mit `/vc shop @{member.display_name}` auf deinen Shop zugreifen.\nViel spaß mit deinen neuen möglichkeiten VC-Punkte zu verdienen!")
             save_storage()
             status = discord.Activity(name="mit VC-Punkten", type=discord.ActivityType.playing, state=f"{num_intalk} {'Person erhält' if num_intalk == 1 else 'Presonen erhalten'} gerade Punkte!", timestamps={}, assets={}, party={}, buttons=[])
             await bot.change_presence(activity=status)
