@@ -97,7 +97,7 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
         return Modal
     return decorator
 
-@text_input("A1", "B1", "C1")
+@text_input("A2", "B2", "C2")
 async def response(self, interaction: discord.Interaction):
     await interaction.response.send_message(self.input.value, ephemeral=True)
 
