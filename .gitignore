@@ -20,8 +20,10 @@ Thumbs.db
 # macOS/Linux/Windows junk
 *.swp
 
+# logs
+*.log
+
 # Storage files
-bot.log
 crash.json
 storage.json
 bot_token.hidden.txt
