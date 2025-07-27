@@ -128,7 +128,7 @@ class BestListButton(discord.ui.Button):
         await self.original_interaction.edit_original_response(content=f"Top VC-Point holders:\n{msg}", view=view)
 
 class Shop:
-    base_slots = {100: 1, 200: 2, 500: 3, 1000: 4, 2500: 5, 5000: 6, 10000: 7}
+    base_slots = {100: 1, 200: 2, 500: 3, 1000: 4, 2500: 5, 5000: 6, 10000: 7, 17500: 8, 30000, 9, 50000: 10}
 
     class OpenShopButton(discord.ui.Button):
         def __init__(self, shop: "Shop"):
