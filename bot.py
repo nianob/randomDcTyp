@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import sys
 import logging
+import os
 
 import uno
 import wordle
@@ -20,8 +21,11 @@ logging.basicConfig(
 )
                 
 def save_storage():
-    with open("storage.json", "w") as f:
+    # saving then renaming is safer than overwriting
+    with open("storage_copy.json", "w") as f:
         json.dump(storage, f)
+    os.remove("storage.json")
+    os.rename("storage_copy.json", "storage.json")
 
 try:
     with open("storage.json", "r") as f:
@@ -68,7 +72,7 @@ class ClearLogsButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Clear Logs", style=discord.ButtonStyle.danger)
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != 719900345383518209:
+        if interaction.user.id != nianob:
             await interaction.response.send_message(f"Sorry, but you don't have permission to do this!", ephemeral=True)
             return
         with open("bot.log", "w") as f:
@@ -78,32 +82,13 @@ class ClearLogsButton(discord.ui.Button):
 
 @discord.app_commands.command(name="logs", description="Get the current log file")
 async def logs(interaction: discord.Interaction):
-    if interaction.user.id != 719900345383518209:
+    if interaction.user.id != nianob:
         await interaction.response.send_message(f"Sorry, but you don't have permission to do this!", ephemeral=True)
         return
     view = discord.ui.View(timeout=300)
     view.add_item(ClearLogsButton())
     with open("bot.log", "rb") as f:
         await interaction.response.send_message("Here you go!", file=discord.File(f, "bot.log"), view=view)
-
-def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None):
-    def decorator(func):
-        class Modal(discord.ui.Modal):
-            def __init__(self):
-                super().__init__(title=title)
-                self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=True, min_length=min_length, max_length=max_length)
-                self.add_item(self.input)
-        Modal.on_submit = func
-        return Modal
-    return decorator
-
-@text_input("A9", "B9", "C9")
-async def response(self, interaction: discord.Interaction):
-    await interaction.response.send_message(self.input.value, ephemeral=True)
-
-@discord.app_commands.command(name="test", description="just to test")
-async def test(interaction: discord.Interaction):
-    await interaction.response.send_modal(response())
 
 @bot.event
 async def on_ready():
@@ -128,17 +113,6 @@ async def on_ready():
 @bot.event
 async def on_message(message: discord.Message):
     channel = message.channel.id
-    if message.content=="Hey RandomDcTyp kannst du mal schnell in den talk kommen?":
-        if message.author.voice and message.author.voice.channel:
-            try:
-                await message.author.voice.channel.connect()
-                await message.channel.send("Ich bin dem Talk beigetreten!")
-            except discord.ClientException:
-                await message.channel.send("Ich bin bereits in einem Sprachkanal.")
-            except Exception as e:
-                await message.channel.send(f"Konnte dem Talk nicht beitreten: {e}")
-        else:
-            await message.channel.send("Du bist in keinem Sprachkanal!")
     if not channel in wordle.ongoing.keys():
         return
     if message.author == bot.user:
@@ -149,7 +123,7 @@ async def was_moved_by_admin(guild: discord.Guild, member: discord.Member):
     async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.member_move):
         # Check if the log is very recent (within 1 second)
         time_diff = (discord.utils.utcnow() - entry.created_at).total_seconds()
-        if time_diff < 3:
+        if time_diff < 0.3:
             # If target is set, verify it's the correct member
             if entry.target and entry.target.id == member.id:
                 return entry.user  # confirmed mover
