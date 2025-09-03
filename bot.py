@@ -41,6 +41,9 @@ if not storage:
     }
     save_storage()
 
+with open("version.txt", "r") as f:
+    version = f.read()
+
 
 class OwnerCommand(discord.app_commands.Group):
     def __init__(self):
@@ -89,6 +92,10 @@ async def logs(interaction: discord.Interaction):
     view.add_item(ClearLogsButton())
     with open("bot.log", "rb") as f:
         await interaction.response.send_message("Here you go!", file=discord.File(f, "bot.log"), view=view)
+
+@discord.app_commands.command(name="version", description="Get the current version number")
+async def version(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Running Version {version}")
 
 @bot.event
 async def on_ready():
