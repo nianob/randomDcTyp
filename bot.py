@@ -105,7 +105,7 @@ async def on_ready():
         ggc = await bot.fetch_guild(999967735326978078)
         bt = await bot.fetch_guild(1056305180699807814)
         bot.tree.add_command(logs)
-        bot.tree.add_command(test)
+        bot.tree.add_command(version)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(vc.vcCommand(), guild=ggc)
