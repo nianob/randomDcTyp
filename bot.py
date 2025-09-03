@@ -22,7 +22,7 @@ logging.basicConfig(
                 
 def save_storage():
     # saving then renaming is safer than overwriting
-    with open("storage_copy.json", "w") as f:
+    with open("storage_copy.json", "n") as f:
         json.dump(storage, f)
     os.remove("storage.json")
     os.rename("storage_copy.json", "storage.json")
