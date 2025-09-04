@@ -151,7 +151,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             await member.move_to(before.channel)
             await mover.send("Sorry, but you cannot move a user out of or into the AFK talk.")
 
-run_on_boot = True
+run_on_boot = False
 uno.bot = bot
 vc.save_storage = save_storage
 vc.storage = storage
