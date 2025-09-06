@@ -22,9 +22,10 @@ logging.basicConfig(
                 
 def save_storage():
     # saving then renaming is safer than overwriting
-    with open("storage_copy.json", "n") as f:
+    with open("storage_copy.json", "w") as f:
         json.dump(storage, f)
-    os.remove("storage.json")
+    if os.path.exists("storage.json"):
+        os.remove("storage.json")
     os.rename("storage_copy.json", "storage.json")
 
 try:
@@ -151,7 +152,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             await member.move_to(before.channel)
             await mover.send("Sorry, but you cannot move a user out of or into the AFK talk.")
 
-run_on_boot = False
+run_on_boot = True
 uno.bot = bot
 vc.save_storage = save_storage
 vc.storage = storage
