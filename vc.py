@@ -33,7 +33,7 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
             def on_submit(self, interaction: discord.Interaction):
                 func(interaction, self.input.value)
 
-        return Modal()
+        return Modal
     return decorator
 
 def button(label = None, style = discord.ButtonStyle.primary):
@@ -462,7 +462,7 @@ class vcCommand(discord.app_commands.Group):
         if storage["vc_points"].get(str(interaction.user.id), 0) < 500:
             await interaction.response.send_message("Sorry, but you don't have enough points to do that! You need 500.", ephemeral=True)
             return
-        await interaction.response.send_modal(partent)
+        await interaction.response.send_modal(partent())
     
     @discord.app_commands.command(name="partents", description="Zeige dir alle Partente an")
     async def partents(self, interaction: discord.Interaction):
@@ -522,7 +522,7 @@ class vcCommand(discord.app_commands.Group):
             storage["vc_points"][str(user.id)] = int(reply)
             save_storage()
             await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points")
-        interaction.response.send_modal(ui)
+        interaction.response.send_modal(ui())
 
 async def reward(bot: commands.Bot):
     while True:
