@@ -15,14 +15,25 @@ ggc: discord.Guild = None
 repoted: dict[int, int] = {}
 
 def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None, style: discord.TextStyle = discord.TextStyle.short):
+    """
+    Example usage:
+    ```
+    @text_input("Example Title", "Example Field")
+    async def response(interaction: discord.Interaction, reply: str):
+        await interaction.response.send_message(f"You wrote `{reply}`")
+    ```
+    """
     def decorator(func):
         class Modal(discord.ui.Modal):
             def __init__(self):
                 super().__init__(title=title)
                 self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=True, min_length=min_length, max_length=max_length, style=style)
                 self.add_item(self.input)
-        Modal.on_submit = func
-        return Modal
+        
+            def on_submit(self, interaction: discord.Interaction):
+                func(interaction, self.input.value)
+
+        return Modal()
     return decorator
 
 def button(label = None, style = discord.ButtonStyle.primary):
@@ -47,7 +58,7 @@ async def getMember(id: int):
 def noEmpty(x: list):
     return [i for i in x if i]
 
-def getBestList(positions: list|range, interaction: discord.Interaction, pointlist: dict[str, int], uids: list[str]):
+def getBestList(positions: list|range, pointlist: dict[str, int], uids: list[str]):
     values = []
     for position in positions:
         if 0 <= position < len(uids):
@@ -61,14 +72,14 @@ def getBestListWithContext(interaction: discord.Interaction, showPositions: rang
         mypos = uids.index(str(interaction.user.id)) if str(interaction.user.id) in uids else None
         lf = "\n"
         
-        msg = getBestList(showPositions, interaction, pointlist, uids)
+        msg = getBestList(showPositions, pointlist, uids)
         if mypos != None:
             showPersonalPositions = list(range(max(0, mypos-1), min(mypos+2, len(uids))))
             for pos in showPositions:
                 if pos in showPersonalPositions:
                     showPersonalPositions.remove(pos)
             if showPersonalPositions:
-                msg2 = getBestList(showPersonalPositions, interaction, pointlist, uids)
+                msg2 = getBestList(showPersonalPositions, pointlist, uids)
                 gap = max(min(showPersonalPositions)-max(showPositions), min(showPositions)-max(showPersonalPositions)) > 1
                 msg2IsBeforeMsg = mypos < showPositions[5]
                 msg = f"{msg2 if msg2IsBeforeMsg else msg}{lf}{'> ...'+lf if gap else ''}{msg if msg2IsBeforeMsg else msg2}"
@@ -81,12 +92,12 @@ def getBestListWithContext(interaction: discord.Interaction, showPositions: rang
         return msg
 
 @text_input("Kaufe ein Partent (500 VC-Points)", "Beschreibung", "Was dein Partent beinhalten soll.\nJedes Objekt einzeln Eingeben.\nNicht \"mein shop\" oder Ähnliches", max_length=500, style=discord.TextStyle.paragraph)
-async def partent(self, interaction: discord.Interaction):
+async def partent(interaction: discord.Interaction, reply:str):
     if storage["vc_points"].get(str(interaction.user.id), 0) < 500:
         await interaction.response.send_message("Sorry, but you don't have enough points to do that!", ephemeral=True)
         return
-    storage["vc_points"][str(self.user.id)] -= 500
-    storage["partents"].append(f"<@{interaction.user.id}>:\n{self.desc.value}")
+    storage["vc_points"][str(interaction.user.id)] -= 500
+    storage["partents"].append(f"<@{interaction.user.id}>:\n{reply}")
     save_storage()
     await interaction.response.send_message(":white_check_mark: Partent Set!", ephemeral=True)
 
@@ -451,7 +462,7 @@ class vcCommand(discord.app_commands.Group):
         if storage["vc_points"].get(str(interaction.user.id), 0) < 500:
             await interaction.response.send_message("Sorry, but you don't have enough points to do that! You need 500.", ephemeral=True)
             return
-        await interaction.response.send_modal(partent())
+        await interaction.response.send_modal(partent)
     
     @discord.app_commands.command(name="partents", description="Zeige dir alle Partente an")
     async def partents(self, interaction: discord.Interaction):
@@ -494,6 +505,24 @@ class vcCommand(discord.app_commands.Group):
             if otherPoints < 100 and otherPoints+points >= 100:
                 await user.send(f"Hi! :wave:\nWie du wahrscheinlich schon mitgekriegt hast, gibt es auf dem GGC jetzt ein Punktesystem. (`/vc info`)\nDa du jetzt 100 VC-Punkte hast kannst du jetzt mit `/vc myshop` deinen eigenen Punkteshop eröffnen!\nAndere benutzer können dann mit `/vc shop @{user.display_name}` auf deinen Shop zugreifen.\nViel spaß mit deinen neuen möglichkeiten VC-Punkte zu verdienen!")
         await interaction.response.send_message(f":white_check_mark: You transfered {points} VC-Points to {user.mention}.", ephemeral=True)
+
+    @discord.app_commands.command(name="manage", description="Manage VC-Points")
+    async def manage(self, interaction: discord.Interaction, user: discord.Member):
+        if interaction.user.id != 719900345383518209:
+            await interaction.response.send_message(":x: Sorry, but you can't do that!", ephemeral=True)
+            return
+        pointlist: dict[str, int] = storage["vc_points"]
+        uid = user.id
+        points: int = pointlist.get(str(uid), 0)
+        @text_input(f"{user.display_name}s Vc Points", "Vc-Points", "", str(points))
+        async def ui(interaction: discord.Interaction, reply: str):
+            if not reply.isnumeric:
+                await interaction.response.send_message(":x: Error: Vc-Points must be a number!", ephemeral=True)
+                return
+            storage["vc_points"][str(user.id)] = int(reply)
+            save_storage()
+            await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points")
+        interaction.response.send_modal(ui)
 
 async def reward(bot: commands.Bot):
     while True:
