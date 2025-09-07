@@ -26,7 +26,7 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
     def decorator(func):
         class Modal(discord.ui.Modal):
             def __init__(self):
-                super().__init__(title=title)
+                super().__init__(title=title, timeout=300)
                 self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=True, min_length=min_length, max_length=max_length, style=style)
                 self.add_item(self.input)
         
