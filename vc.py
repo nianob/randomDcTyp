@@ -516,12 +516,12 @@ class vcCommand(discord.app_commands.Group):
         points: int = pointlist.get(str(uid), 0)
         @text_input(f"{user.display_name}s Vc Points", "Vc-Points", "", str(points))
         async def ui(interaction: discord.Interaction, reply: str):
-            if not reply.isnumeric:
+            if not reply.isnumeric():
                 await interaction.response.send_message(":x: Error: Vc-Points must be a number!", ephemeral=True)
                 return
             storage["vc_points"][str(user.id)] = int(reply)
             save_storage()
-            await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points")
+            await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points", ephemeral=True)
         await interaction.response.send_modal(ui())
 
 async def reward(bot: commands.Bot):
