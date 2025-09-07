@@ -522,7 +522,7 @@ class vcCommand(discord.app_commands.Group):
             storage["vc_points"][str(user.id)] = int(reply)
             save_storage()
             await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points")
-        interaction.response.send_modal(ui())
+        await interaction.response.send_modal(ui())
 
 async def reward(bot: commands.Bot):
     while True:
