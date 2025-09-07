@@ -30,8 +30,8 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
                 self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=True, min_length=min_length, max_length=max_length, style=style)
                 self.add_item(self.input)
         
-            def on_submit(self, interaction: discord.Interaction):
-                func(interaction, self.input.value)
+            async def on_submit(self, interaction: discord.Interaction):
+                await func(interaction, self.input.value)
 
         return Modal
     return decorator
