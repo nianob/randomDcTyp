@@ -8,6 +8,7 @@ import os
 import uno
 import wordle
 import vc
+import swarmfm
 
 nianob = 719900345383518209
 
@@ -104,11 +105,11 @@ async def on_ready():
     if not bot.tree.get_command('logs'): # Bot has not initialized commands
         await vc.finish_init()
         ggc = await bot.fetch_guild(999967735326978078)
-        bt = await bot.fetch_guild(1056305180699807814)
         bot.tree.add_command(logs)
         bot.tree.add_command(version)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
+        bot.tree.add_command(swarmfm.swarmfmCommand())
         bot.tree.add_command(vc.vcCommand(), guild=ggc)
         bot.tree.add_command(OwnerCommand(), guild=ggc)
         await bot.tree.sync()
@@ -158,6 +159,7 @@ vc.save_storage = save_storage
 vc.storage = storage
 vc.bot = bot
 vc.logging = logging
+swarmfm.bot = bot
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
