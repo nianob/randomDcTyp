@@ -36,9 +36,15 @@ class swarmfmCommand(discord.app_commands.Group):
         if interaction.guild.voice_client == None:
             await vc.connect()
         
-        source = await self.get_stream()
+        try:
+            source = await self.get_stream()
+        except KeyError:
+            await interaction.followup.send(":x: Cannot find Livestream! Please try again later.", ephemeral=True)
+            await interaction.guild.voice_client.disconnect()
+            return
+        
         interaction.guild.voice_client.play(source)
-        await interaction.followup.send("Playing Swarm Fm", ephemeral=True)
+        await interaction.followup.send(":white_check_mark: Playing Swarm Fm", ephemeral=True)
 
     @discord.app_commands.command(name="leave", description="Leave the VC")
     async def leave(self, interaction: discord.Interaction):
@@ -51,13 +57,20 @@ class swarmfmCommand(discord.app_commands.Group):
     @discord.app_commands.command(name="reload", description="Reload the Stream")
     async def reload(self, interaction: discord.Interaction):
         if not interaction.guild.voice_client:
-            await interaction.response.send_message(":x: Im not in a VC!")
+            await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
             return
         
+        await interaction.response.defer()
         interaction.guild.voice_client.stop()
-        source = await self.get_stream()
+        try:
+            source = await self.get_stream()
+        except KeyError:
+            await interaction.followup.send(":x: Cannot find Livestream! Please try again later.", ephemeral=True)
+            await interaction.guild.voice_client.disconnect()
+            return
+        
         interaction.guild.voice_client.play(source)
-        await interaction.response.send_message(":white_check_mark: Reloaded Player!", ephemeral=True)
+        await interaction.followup.send(":white_check_mark: Reloaded Player!", ephemeral=True)
 
     async def get_stream(self) -> discord.FFmpegPCMAudio:
         stream_url = get_stream_url()
