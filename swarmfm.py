@@ -78,4 +78,4 @@ class swarmfmCommand(discord.app_commands.Group):
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", "options": "-vn"
         }
         audio = discord.FFmpegPCMAudio(stream_url, **ffmpeg_options)
-        return discord.PCMVolumeTransformer(audio, volume=0.3)
+        return discord.PCMVolumeTransformer(audio, volume=0.2)
