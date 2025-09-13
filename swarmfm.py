@@ -60,7 +60,7 @@ class swarmfmCommand(discord.app_commands.Group):
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
             return
         
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         interaction.guild.voice_client.stop()
         try:
             source = await self.get_stream()
@@ -78,4 +78,4 @@ class swarmfmCommand(discord.app_commands.Group):
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", "options": "-vn"
         }
         audio = discord.FFmpegPCMAudio(stream_url, **ffmpeg_options)
-        return discord.PCMVolumeTransformer(audio, volume=0.2)
+        return discord.PCMVolumeTransformer(audio, volume=0.1)
