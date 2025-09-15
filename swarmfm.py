@@ -85,7 +85,7 @@ class swarmfmCommand(discord.app_commands.Group):
 
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     # Conditions
-    if not (before and not after): # User leaves a talk
+    if not (before.channel and not after.channel): # User leaves a talk
         return
     if member.id == bot.user.id: # User is not the bot
         return
