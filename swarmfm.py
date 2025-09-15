@@ -27,7 +27,7 @@ class swarmfmCommand(discord.app_commands.Group):
         super().__init__(name="swarmfm", description="Swarm Fm")
 
     @discord.app_commands.command(name="join", description="Join your VC")
-    @discord.app_commands.Parameter(name="url", description="The URL of the stream", required=False, type=discord.AppCommandOptionType.string)
+    @discord.app_commands.describe(url="The URL of the stream")
     async def join(self, interaction: discord.Interaction, url: str|None=None):
         await interaction.response.defer(ephemeral=True)
         if not interaction.user.voice:
@@ -56,7 +56,7 @@ class swarmfmCommand(discord.app_commands.Group):
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
 
     @discord.app_commands.command(name="reload", description="Reload the Stream")
-    @discord.app_commands.Parameter(name="url", description="The URL of the stream", required=False, type=discord.AppCommandOptionType.string)
+    @discord.app_commands.describe(url="The URL of the stream")
     async def reload(self, interaction: discord.Interaction, url: str|None=None):
         if not interaction.guild.voice_client:
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
