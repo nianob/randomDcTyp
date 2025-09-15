@@ -83,7 +83,6 @@ class swarmfmCommand(discord.app_commands.Group):
         audio = discord.FFmpegPCMAudio(url, **ffmpeg_options)
         return discord.PCMVolumeTransformer(audio, volume=0.1)
 
-@bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     # Conditions
     if not (before and not after): # User leaves a talk

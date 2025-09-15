@@ -142,6 +142,7 @@ async def was_moved_by_admin(guild: discord.Guild, member: discord.Member):
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    await swarmfm.on_voice_state_update(member, before, after)
     afk_channel_id = 1392955385908039701
     guild = member.guild
 
