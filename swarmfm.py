@@ -7,21 +7,6 @@ import asyncio
 
 bot: commands.Bot = None # This should be overwritten by the importing script
 
-def get_stream_url() -> str:
-    req = urllib.request.Request(
-        "https://sw.arm.fm/api/livestream",
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/129.0 Safari/537.36"
-        }
-    )
-    url = json.load(urllib.request.urlopen(req))["livestreamUrl"]
-    ydl_opts = {"format": "91", "quiet": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info["url"]
-
 class swarmfmCommand(discord.app_commands.Group):
     def __init__(self):
         super().__init__(name="swarmfm", description="Swarm Fm")
@@ -34,11 +19,7 @@ class swarmfmCommand(discord.app_commands.Group):
             await interaction.response.send_message(":x: You are not in a VC!", ephemeral=True)
             return
         
-        try:
-            source = await self.get_stream(url)
-        except KeyError:
-            await interaction.followup.send(":x: Cannot find Livestream! Please try again later.", ephemeral=True)
-            return
+        source = await self.get_stream(url)
         
         vc: discord.VoiceChannel = interaction.user.voice.channel
         if interaction.guild.voice_client == None:
@@ -64,19 +45,15 @@ class swarmfmCommand(discord.app_commands.Group):
         
         await interaction.response.defer(ephemeral=True)
         interaction.guild.voice_client.stop()
-        try:
-            source = await self.get_stream(url)
-        except KeyError:
-            await interaction.followup.send(":x: Cannot find Livestream! Please try again later.", ephemeral=True)
-            await interaction.guild.voice_client.disconnect()
-            return
+
+            source = self.get_stream(url)
         
         interaction.guild.voice_client.play(source)
         await interaction.followup.send(":white_check_mark: Reloaded Player!", ephemeral=True)
 
-    async def get_stream(self, url: str|None=None) -> discord.FFmpegPCMAudio:
+    def get_stream(self, url: str|None=None) -> discord.FFmpegPCMAudio:
         if not url:
-            url = get_stream_url()
+            url = "https://cast.sw.arm.fm/stream"
         ffmpeg_options = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", "options": "-vn"
         }
