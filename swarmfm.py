@@ -46,7 +46,7 @@ class swarmfmCommand(discord.app_commands.Group):
         await interaction.response.defer(ephemeral=True)
         interaction.guild.voice_client.stop()
 
-            source = self.get_stream(url)
+        source = self.get_stream(url)
         
         interaction.guild.voice_client.play(source)
         await interaction.followup.send(":white_check_mark: Reloaded Player!", ephemeral=True)
