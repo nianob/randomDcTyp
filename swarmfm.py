@@ -1,9 +1,5 @@
 import discord
 from discord.ext import commands
-import urllib.request
-import json
-import yt_dlp
-import asyncio
 
 bot: commands.Bot = None # This should be overwritten by the importing script
 
@@ -19,7 +15,7 @@ class swarmfmCommand(discord.app_commands.Group):
             await interaction.response.send_message(":x: You are not in a VC!", ephemeral=True)
             return
         
-        source = await self.get_stream(url)
+        source = self.get_stream(url)
         
         vc: discord.VoiceChannel = interaction.user.voice.channel
         if interaction.guild.voice_client == None:
