@@ -17,13 +17,13 @@ async def close_idle_games():
             del ongoing[channel]
 
 ongoing = dict[int, "Wordle"]()
-with open("wordle/validwords_en.txt", "r") as f:
+with open("wordle/validwords_en.txt", "r", encoding="utf-8") as f:
     validwordlist_en = [x.upper()[:5] for x in f.readlines()]
-with open("wordle/guesswords_en.txt", "r") as f:
+with open("wordle/guesswords_en.txt", "r", encoding="utf-8") as f:
     guesswordlist_en = [x.upper()[:5] for x in f.readlines()]
-with open("wordle/validwords_de.txt", "r") as f:
+with open("wordle/validwords_de.txt", "r", encoding="utf-8") as f:
     validwordlist_de = [x.upper()[:5] for x in f.readlines()]
-with open("wordle/guesswords_de.txt", "r") as f:
+with open("wordle/guesswords_de.txt", "r", encoding="utf-8") as f:
     guesswordlist_de = [x.upper()[:5] for x in f.readlines()]
 
 

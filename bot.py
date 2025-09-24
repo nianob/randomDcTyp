@@ -9,6 +9,7 @@ import uno
 import wordle
 import vc
 import swarmfm
+import talk
 
 nianob = 719900345383518209
 
@@ -103,20 +104,32 @@ async def version(interaction: discord.Interaction):
 async def on_ready():
     global ggc
     if not bot.tree.get_command('logs'): # Bot has not initialized commands
-        await vc.finish_init()
-        ggc = await bot.fetch_guild(999967735326978078)
+
+        try:
+            ggc = await bot.fetch_guild(999967735326978078)
+            await vc.finish_init()
+        except discord.errors.NotFound:
+            ggc = None
+
+        # General Commands
         bot.tree.add_command(logs)
         bot.tree.add_command(version)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(swarmfm.swarmfmCommand())
-        bot.tree.add_command(vc.vcCommand(), guild=ggc)
-        bot.tree.add_command(OwnerCommand(), guild=ggc)
+        bot.tree.add_command(talk.talkCommand())
         await bot.tree.sync()
-        await bot.tree.sync(guild=ggc)
-        #await bot.tree.sync(guild=bt)
+
+        # GGC Only Commands
+        if ggc:
+            logging.warning("GGC Not Found")
+            bot.tree.add_command(vc.vcCommand(), guild=ggc)
+            bot.tree.add_command(OwnerCommand(), guild=ggc)
+            await bot.tree.sync(guild=ggc)
+            
+            bot.loop.create_task(vc.reward(bot))
+
         bot.loop.create_task(wordle.close_idle_games())
-        bot.loop.create_task(vc.reward(bot))
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")
 
 @bot.event
@@ -143,6 +156,7 @@ async def was_moved_by_admin(guild: discord.Guild, member: discord.Member):
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     await swarmfm.on_voice_state_update(member, before, after)
+    await talk.on_voice_state_update(member, before, after)
     afk_channel_id = 1392955385908039701
     guild = member.guild
 
@@ -161,6 +175,7 @@ vc.storage = storage
 vc.bot = bot
 vc.logging = logging
 swarmfm.bot = bot
+talk.bot = bot
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
