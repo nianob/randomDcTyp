@@ -30,19 +30,22 @@ def save_storage():
         os.remove("storage.json")
     os.rename("storage_copy.json", "storage.json")
 
+def ensureKey(dictionary: dict[str, any], name: str, default_value: any):
+    if name not in dictionary.keys():
+        dictionary[name] = default_value
+
 try:
     with open("storage.json", "r") as f:
         storage = json.load(f)
 except:
-    storage = None
-if not storage:
-    storage = {
-        "hiddenOwners": [],
-        "vc_points": {},
-        "max_vc_points": {},
-        "shops": {}
-    }
-    save_storage()
+    storage = {}
+
+ensureKey(storage, "hiddenOwners", [])
+ensureKey(storage, "vc_points", {})
+ensureKey(storage, "max_vc_points", {})
+ensureKey(storage, "shops", {})
+ensureKey(storage, "talks", {})
+save_storage()
 
 with open("version.txt", "r") as f:
     VERSION = f.read()
@@ -176,6 +179,8 @@ vc.bot = bot
 vc.logging = logging
 swarmfm.bot = bot
 talk.bot = bot
+talk.save_storage = save_storage
+talk.storage = storage
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
