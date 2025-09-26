@@ -6,7 +6,8 @@ bot: commands.Bot = None # This should be overwritten by the importing script
 save_storage: any = None # This should be overwritten by the importing script
 storage: dict[str, any] = None # This should be overwritten by the importing script
 
-auto_delete_talks: list[discord.VoiceChannel] = []
+auto_delete_talks: dict[discord.VoiceChannel, int] = {}
+user_talks: dict[int, discord.VoiceChannel] = {}
 boolTexts = {False: "No", True: "Yes"}
 
 def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None, style: discord.TextStyle = discord.TextStyle.short):
@@ -89,6 +90,9 @@ class talkCommand(discord.app_commands.Group):
 
     @discord.app_commands.command(name="create", description="Open your VC")
     async def create(self, interaction: discord.Interaction):
+        if interaction.user.id in user_talks.keys():
+            await interaction.response.send_message("You already have a talk open", ephemeral=True)
+            return
         settings = talkSettings(interaction.user.id)
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
@@ -98,12 +102,14 @@ class talkCommand(discord.app_commands.Group):
         else:
             category = await guild.create_category("User Talks")
         talk = await guild.create_voice_channel(settings.name or f"{interaction.user.display_name}s Talk", category=category)
+        user_talks[interaction.user.id] = talk
         await interaction.followup.send(content=f":white_check_mark: Created {talk.mention}!")
-        await asyncio.sleep(300)
+        await asyncio.sleep(180)
         if len(talk.members) == 0:
             await talk.delete()
+            user_talks.pop(interaction.user.id)
         else:
-            auto_delete_talks.append(talk)
+            auto_delete_talks[talk] = interaction.user.id
     
     @discord.app_commands.command(name="settings", description="Configure your VC")
     async def settings(self, interaction: discord.Interaction):
@@ -123,5 +129,5 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         return
     if not before.channel in auto_delete_talks:
         return
-    auto_delete_talks.remove(before.channel)
+    user_talks.pop(auto_delete_talks.pop(before.channel))
     await before.channel.delete()
