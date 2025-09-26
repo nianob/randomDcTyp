@@ -37,8 +37,9 @@ class talkSettings:
         self.soundboard: bool
         self.name: str
 
-        if user in storage["talks"].keys():
-            self.load_data(storage["talks"][user])
+        self.user: int = user
+        if str(user) in storage["talks"].keys():
+            self.load_data(storage["talks"][str(user)])
         else:
             self.load_default()
     
@@ -50,11 +51,30 @@ class talkSettings:
         self.soundboard = False
         self.name = None
 
-    async def apply(self, talk: discord.VoiceChannel):
-        await talk.edit(name=self.name, overwrites=discord.PermissionOverwrite(use_soundboard=self.soundboard))
+    async def apply(self, interaction: discord.Interaction):
+        self.save()
+        talk = user_talks.get(self.user)
+        if talk:
+            user_talks[interaction.user.id] = await talk.edit(name=self.name, overwrites=self.get_overwrites(interaction))
+    
+    def get_overwrites(self, interaction: discord.Interaction):
+        return {interaction.guild.default_role: discord.PermissionOverwrite(use_soundboard=self.soundboard)}
+
+    async def create_talk(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        category_names = [category.name for category in guild.categories]
+        if "User Talks" in category_names:
+            category = guild.categories[category_names.index("User Talks")]
+        else:
+            category = await guild.create_category("User Talks")
+        return await interaction.guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction))
     
     def message(self) -> str:
         return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`"
+
+    def save(self):
+        storage["talks"][str(self.user)] = {"soundboard": self.soundboard, "name": self.name}
+        save_storage()
 
 class toggleButton(discord.ui.Button):
     def __init__(self, label: str, settings: talkSettings, varName: str, orig_interaction: discord.Interaction):
@@ -83,6 +103,21 @@ class changeNameButton(discord.ui.Button):
             await interaction.response.defer()
         
         await interaction.response.send_modal(modal())
+    
+class applyButton(discord.ui.Button):
+    def __init__(self, settings: talkSettings):
+        self.settings = settings
+        super().__init__(style=discord.ButtonStyle.green, label="Apply")
+    
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        ratelimit_message_task = bot.loop.create_task(self.message_ratelimit(interaction))
+        await self.settings.apply(interaction)
+        ratelimit_message_task.cancel()
+    
+    async def message_ratelimit(self, interaction: discord.Interaction):
+        await asyncio.sleep(3)
+        await interaction.followup.send(content="**The edit is taking longer than expected!**\nThis usually happens, when this bot request too many edits.\nYour edits will automatically be applied, when the rate-limit lifts.\n-# Expected wait time: 10 Minutes", ephemeral=True)
 
 class talkCommand(discord.app_commands.Group):
     def __init__(self):
@@ -95,13 +130,7 @@ class talkCommand(discord.app_commands.Group):
             return
         settings = talkSettings(interaction.user.id)
         await interaction.response.defer(ephemeral=True)
-        guild = interaction.guild
-        category_names = [category.name for category in guild.categories]
-        if "User Talks" in category_names:
-            category = guild.categories[category_names.index("User Talks")]
-        else:
-            category = await guild.create_category("User Talks")
-        talk = await guild.create_voice_channel(settings.name or f"{interaction.user.display_name}s Talk", category=category)
+        talk = await settings.create_talk(interaction)
         user_talks[interaction.user.id] = talk
         await interaction.followup.send(content=f":white_check_mark: Created {talk.mention}!")
         await asyncio.sleep(180)
@@ -118,6 +147,7 @@ class talkCommand(discord.app_commands.Group):
         view = discord.ui.View()
         view.add_item(toggleButton("Soundboard", settings, "soundboard", interaction))
         view.add_item(changeNameButton("Name", settings, "name", interaction))
+        view.add_item(applyButton(settings))
         await interaction.response.send_message(message, ephemeral=True, view=view)
 
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
