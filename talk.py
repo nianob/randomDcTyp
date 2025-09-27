@@ -10,6 +10,12 @@ auto_delete_talks: dict[discord.VoiceChannel, int] = {}
 user_talks: dict[int, discord.VoiceChannel] = {}
 boolTexts = {False: "No", True: "Yes"}
 
+def from_value(dictionary: dict, item: any) -> any:
+    for key, value in dictionary.items():
+        if value == item:
+            return key
+    raise ValueError(f"Item {item} not found in dictionary values")
+
 def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None, style: discord.TextStyle = discord.TextStyle.short):
     """
     Example usage:
@@ -23,7 +29,7 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
         class Modal(discord.ui.Modal):
             def __init__(self):
                 super().__init__(title=title, timeout=300)
-                self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=True, min_length=min_length, max_length=max_length, style=style)
+                self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=bool(min_length), min_length=min_length, max_length=max_length, style=style)
                 self.add_item(self.input)
         
             async def on_submit(self, interaction: discord.Interaction):
@@ -36,6 +42,8 @@ class talkSettings:
     def __init__(self, user: int):
         self.soundboard: bool
         self.name: str
+        self.banlist: list[int]
+        self.banlist_is_whitelist: bool
 
         self.user: int = user
         if str(user) in storage["talks"].keys():
@@ -46,16 +54,24 @@ class talkSettings:
     def load_data(self, storage: dict[str, any]):
         self.soundboard = storage["soundboard"]
         self.name = storage["name"]
+        self.banlist = storage["banlist"]
+        self.banlist_is_whitelist = storage["banlist_is_whitelist"]
 
     def load_default(self):
         self.soundboard = False
         self.name = None
+        self.banlist = []
+        self.banlist_is_whitelist = False
 
     async def apply(self, interaction: discord.Interaction):
         self.save()
         talk = user_talks.get(self.user)
         if talk:
-            user_talks[interaction.user.id] = await talk.edit(name=self.name, overwrites=self.get_overwrites(interaction))
+            for member in talk.members:
+                if (member.id in self.banlist) ^ self.banlist_is_whitelist:
+                    if member.id != self.user:
+                        await member.move_to(None)
+            user_talks[interaction.user.id] = await talk.edit(name=self.name or f"{interaction.user.display_name}s Talk", overwrites=self.get_overwrites(interaction))
     
     def get_overwrites(self, interaction: discord.Interaction):
         return {interaction.guild.default_role: discord.PermissionOverwrite(use_soundboard=self.soundboard)}
@@ -70,10 +86,15 @@ class talkSettings:
         return await interaction.guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction))
     
     def message(self) -> str:
-        return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`"
+        return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}"    
 
     def save(self):
-        storage["talks"][str(self.user)] = {"soundboard": self.soundboard, "name": self.name}
+        storage["talks"][str(self.user)] = {
+            "soundboard": self.soundboard,
+            "name": self.name, 
+            "banlist": self.banlist,
+            "banlist_is_whitelist": self.banlist_is_whitelist
+            }
         save_storage()
 
 class toggleButton(discord.ui.Button):
@@ -96,9 +117,9 @@ class changeNameButton(discord.ui.Button):
         super().__init__(style=discord.ButtonStyle.primary, label=label)
     
     async def callback(self, interaction: discord.Interaction):
-        @text_input("Talk Settings", self.label, default=self.settings.name or f"{interaction.user.display_name}s Talk", min_length=4, max_length=20)
+        @text_input("Talk Settings", self.label, default=self.settings.name or f"{interaction.user.display_name}s Talk", max_length=20)
         async def modal(interaction: discord.Interaction, reply: str):
-            self.settings.name = reply
+            self.settings.name = reply if reply else None
             await self.orig_interaction.edit_original_response(content=self.settings.message())
             await interaction.response.defer()
         
@@ -122,6 +143,7 @@ class applyButton(discord.ui.Button):
 class talkCommand(discord.app_commands.Group):
     def __init__(self):
         super().__init__(name="talk", description="Your own Talks")
+        self.add_command(banlistCommand())
 
     @discord.app_commands.command(name="create", description="Open your VC")
     async def create(self, interaction: discord.Interaction):
@@ -132,7 +154,7 @@ class talkCommand(discord.app_commands.Group):
         await interaction.response.defer(ephemeral=True)
         talk = await settings.create_talk(interaction)
         user_talks[interaction.user.id] = talk
-        await interaction.followup.send(content=f":white_check_mark: Created {talk.mention}!")
+        await interaction.followup.send(content=f":white_check_mark: Created {talk.mention}!", ephemeral=True)
         await asyncio.sleep(180)
         if len(talk.members) == 0:
             await talk.delete()
@@ -147,15 +169,61 @@ class talkCommand(discord.app_commands.Group):
         view = discord.ui.View()
         view.add_item(toggleButton("Soundboard", settings, "soundboard", interaction))
         view.add_item(changeNameButton("Name", settings, "name", interaction))
+        view.add_item(toggleButton("Banlist Mode", settings, "banlist_is_whitelist", interaction))
         view.add_item(applyButton(settings))
         await interaction.response.send_message(message, ephemeral=True, view=view)
 
+class banlistCommand(discord.app_commands.Group):
+    def __init__(self):
+        super().__init__(name="banlist", description="Manage your banlist")
+
+    @discord.app_commands.command(name="add", description="Add a member to your banlist")
+    async def banlist_add(self, interaction: discord.Interaction, member: discord.Member):
+        settings = talkSettings(interaction.user.id)
+        if member.id not in settings.banlist:
+            settings.banlist.append(member.id)
+            settings.save()
+            await interaction.response.send_message(f":white_check_mark: Added {member.mention} to the banlist.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"{member.mention} is already in the banlist", ephemeral=True)
+    
+    @discord.app_commands.command(name="remove", description="Remove a member from your banlist")
+    async def banlist_remove(self, interaction: discord.Interaction, member: discord.Member):
+        settings = talkSettings(interaction.user.id)
+        if member.id in settings.banlist:
+            settings.banlist.remove(member.id)
+            settings.save()
+            await interaction.response.send_message(f":white_check_mark: Removed {member.mention} from the banlist.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"{member.mention} is not in the banlist.", ephemeral=True)
+    
+    @discord.app_commands.command(name="clear", description="Clear your entire banlist")
+    async def banlist_clear(self, interaction: discord.Interaction):
+        settings = talkSettings(interaction.user.id)
+        settings.banlist = []
+        settings.save()
+        await interaction.response.send_message(":white_check_mark: The banlist is now empty.", ephemeral=True)
+
+    @discord.app_commands.command(name="list", description="List your entire banlist")
+    async def banlist_list(self, interaction: discord.Interaction):
+        settings = talkSettings(interaction.user.id)
+        await interaction.response.send_message(f"Here is your banlist:\n{', '.join(map(lambda x: f'<@{x}>', settings.banlist))}", ephemeral=True)
+
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    if after.channel == before.channel:
+        return
+
+    # kick banned members
+    if after.channel in user_talks.values():
+        settings = talkSettings(from_value(user_talks, after.channel))
+        if (member.id in settings.banlist) ^ settings.banlist_is_whitelist:
+            if member.id != settings.user:
+                await member.move_to(before.channel)
+
+    # Delete empty talks
     if not before.channel:
         return
     if len(before.channel.members) != 0:
-        return
-    if after.channel and after.channel == before.channel:
         return
     if not before.channel in auto_delete_talks:
         return
