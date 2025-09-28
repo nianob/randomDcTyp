@@ -8,6 +8,7 @@ storage: dict[str, any] = None # This should be overwritten by the importing scr
 
 auto_delete_talks: dict[discord.VoiceChannel, int] = {}
 user_talks: dict[int, discord.VoiceChannel] = {}
+talk_roles: dict[int, discord.Role] = {}
 boolTexts = {False: "No", True: "Yes"}
 
 def from_value(dictionary: dict, item: any) -> any:
@@ -71,10 +72,50 @@ class talkSettings:
                 if (member.id in self.banlist) ^ self.banlist_is_whitelist:
                     if member.id != self.user:
                         await member.move_to(None)
-            user_talks[interaction.user.id] = await talk.edit(name=self.name or f"{interaction.user.display_name}s Talk", overwrites=self.get_overwrites(interaction))
+            user_talks[interaction.user.id] = await talk.edit(name=self.name or f"{interaction.user.display_name}s Talk", overwrites=self.get_overwrites(interaction, talk_roles[interaction.user.id]))
     
-    def get_overwrites(self, interaction: discord.Interaction):
-        return {interaction.guild.default_role: discord.PermissionOverwrite(use_soundboard=self.soundboard)}
+    async def add_users_to_role(self, interaction: discord.Interaction, role: discord.Role):
+        guild = interaction.guild
+
+        tasks = []
+        for uid in self.banlist:
+            member = guild.get_member(uid)
+            if member:
+                tasks.append(member.add_roles(role))
+        
+        if tasks:
+            await asyncio.gather(*tasks)
+    
+    async def remove_role_users(self, interaction: discord.Interaction, role: discord.Role):
+        guild = interaction.guild
+
+        tasks = []
+        for uid in self.banlist:
+            member = guild.get_member(uid)
+            if member:
+                tasks.append(member.remove_roles(role))
+        
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    def get_overwrites(self, interaction: discord.Interaction, role: discord.Role):
+        return {
+            interaction.guild.default_role: discord.PermissionOverwrite(
+                use_soundboard = self.soundboard,
+                connect = self.banlist_is_whitelist,
+                view_channel = self.banlist_is_whitelist
+                ),
+            role: discord.PermissionOverwrite(
+                connect = not self.banlist_is_whitelist,
+                view_channel = not self.banlist_is_whitelist
+                ),
+            interaction.user: discord.PermissionOverwrite(
+                connect=True,
+                view_channel=True,
+                mute_members=True,
+                deafen_members=True,
+            )
+            }
 
     async def create_talk(self, interaction: discord.Interaction):
         guild = interaction.guild
@@ -83,7 +124,10 @@ class talkSettings:
             category = guild.categories[category_names.index("User Talks")]
         else:
             category = await guild.create_category("User Talks")
-        return await interaction.guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction))
+        role = await interaction.guild.create_role(name=f"talk_{self.user}")
+        talk = await interaction.guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
+        await self.add_users_to_role(interaction, role)
+        return talk, role
     
     def message(self) -> str:
         return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}"    
@@ -152,12 +196,14 @@ class talkCommand(discord.app_commands.Group):
             return
         settings = talkSettings(interaction.user.id)
         await interaction.response.defer(ephemeral=True)
-        talk = await settings.create_talk(interaction)
+        talk, role = await settings.create_talk(interaction)
         user_talks[interaction.user.id] = talk
+        talk_roles[interaction.user.id] = role
         await interaction.followup.send(content=f":white_check_mark: Created {talk.mention}!", ephemeral=True)
         await asyncio.sleep(180)
         if len(talk.members) == 0:
             await talk.delete()
+            await role.delete()
             user_talks.pop(interaction.user.id)
         else:
             auto_delete_talks[talk] = interaction.user.id
@@ -183,6 +229,8 @@ class banlistCommand(discord.app_commands.Group):
         if member.id not in settings.banlist:
             settings.banlist.append(member.id)
             settings.save()
+            if interaction.user.id in talk_roles.keys():
+                await member.add_roles(talk_roles[interaction.user.id])
             await interaction.response.send_message(f":white_check_mark: Added {member.mention} to the banlist.", ephemeral=True)
             return
         await interaction.response.send_message(f"{member.mention} is already in the banlist", ephemeral=True)
@@ -193,6 +241,8 @@ class banlistCommand(discord.app_commands.Group):
         if member.id in settings.banlist:
             settings.banlist.remove(member.id)
             settings.save()
+            if interaction.user.id in talk_roles.keys():
+                await member.remove_roles(talk_roles[interaction.user.id])
             await interaction.response.send_message(f":white_check_mark: Removed {member.mention} from the banlist.", ephemeral=True)
             return
         await interaction.response.send_message(f"{member.mention} is not in the banlist.", ephemeral=True)
@@ -200,9 +250,14 @@ class banlistCommand(discord.app_commands.Group):
     @discord.app_commands.command(name="clear", description="Clear your entire banlist")
     async def banlist_clear(self, interaction: discord.Interaction):
         settings = talkSettings(interaction.user.id)
+        if interaction.user.id in talk_roles.keys():
+            await interaction.response.defer(ephemeral=True)
+            await settings.remove_role_users(interaction, talk_roles[interaction.user.id])
+            await interaction.followup.send(content=":white_check_mark: The banlist is now empty.", ephemeral=True)
+        else:
+            await interaction.response.send_message(":white_check_mark: The banlist is now empty.", ephemeral=True)
         settings.banlist = []
         settings.save()
-        await interaction.response.send_message(":white_check_mark: The banlist is now empty.", ephemeral=True)
 
     @discord.app_commands.command(name="list", description="List your entire banlist")
     async def banlist_list(self, interaction: discord.Interaction):
@@ -227,5 +282,8 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         return
     if not before.channel in auto_delete_talks:
         return
-    user_talks.pop(auto_delete_talks.pop(before.channel))
+    talk_id = auto_delete_talks.pop(before.channel)
+    user_talks.pop(talk_id)
+    role = talk_roles.pop(talk_id)
     await before.channel.delete()
+    await role.delete()
