@@ -11,6 +11,15 @@ user_talks: dict[int, discord.VoiceChannel] = {}
 talk_roles: dict[int, discord.Role] = {}
 boolTexts = {False: "No", True: "Yes"}
 
+async def get_member(interaction: discord.Interaction, uid: int) -> discord.Member | None:
+    member = interaction.guild.get_member(uid)
+    if member:
+        return member
+    try:
+        return await interaction.guild.fetch_member(uid)
+    except discord.NotFound:
+        return None
+
 def from_value(dictionary: dict, item: any) -> any:
     for key, value in dictionary.items():
         if value == item:
@@ -75,25 +84,27 @@ class talkSettings:
             user_talks[interaction.user.id] = await talk.edit(name=self.name or f"{interaction.user.display_name}s Talk", overwrites=self.get_overwrites(interaction, talk_roles[interaction.user.id]))
     
     async def add_users_to_role(self, interaction: discord.Interaction, role: discord.Role):
-        guild = interaction.guild
+        async def process(user: int):
+            member = await get_member(interaction, user)
+            if member:
+                await member.add_roles(role)
 
         tasks = []
         for uid in self.banlist:
-            member = guild.get_member(uid)
-            if member:
-                tasks.append(member.add_roles(role))
+            tasks.append(process(uid))
         
         if tasks:
             await asyncio.gather(*tasks)
     
     async def remove_role_users(self, interaction: discord.Interaction, role: discord.Role):
-        guild = interaction.guild
+        async def process(user: int):
+            member = await get_member(interaction, user)
+            if member:
+                await member.remove_roles(role)
 
         tasks = []
         for uid in self.banlist:
-            member = guild.get_member(uid)
-            if member:
-                tasks.append(member.remove_roles(role))
+            tasks.append(process(uid))
         
         if tasks:
             await asyncio.gather(*tasks)
@@ -102,18 +113,16 @@ class talkSettings:
         return {
             interaction.guild.default_role: discord.PermissionOverwrite(
                 use_soundboard = self.soundboard,
-                connect = self.banlist_is_whitelist,
-                view_channel = self.banlist_is_whitelist
-                ),
-            role: discord.PermissionOverwrite(
                 connect = not self.banlist_is_whitelist,
                 view_channel = not self.banlist_is_whitelist
+                ),
+            role: discord.PermissionOverwrite(
+                connect = self.banlist_is_whitelist,
+                view_channel = self.banlist_is_whitelist
                 ),
             interaction.user: discord.PermissionOverwrite(
                 connect=True,
                 view_channel=True,
-                mute_members=True,
-                deafen_members=True,
             )
             }
 
