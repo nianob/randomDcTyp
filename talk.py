@@ -54,6 +54,7 @@ class talkSettings:
         self.name: str
         self.banlist: list[int]
         self.banlist_is_whitelist: bool
+        self.unsaved: bool = False
 
         self.user: int = user
         if str(user) in storage["talks"].keys():
@@ -139,7 +140,7 @@ class talkSettings:
         return talk, role
     
     def message(self) -> str:
-        return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}"    
+        return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}\n{'-# Warning: there are unsaved changes' if self.unsaved else ''}"    
 
     def save(self):
         storage["talks"][str(self.user)] = {
@@ -161,6 +162,7 @@ class toggleButton(discord.ui.Button):
         self.settings.__dict__[self.varName] = not self.settings.__dict__[self.varName]
         await self.orig_interaction.edit_original_response(content=self.settings.message())
         await interaction.response.defer()
+        self.settings.unsaved = True
 
 class changeNameButton(discord.ui.Button):
     def __init__(self, label: str, settings: talkSettings, varName: str, orig_interaction: discord.Interaction):
@@ -170,21 +172,25 @@ class changeNameButton(discord.ui.Button):
         super().__init__(style=discord.ButtonStyle.primary, label=label)
     
     async def callback(self, interaction: discord.Interaction):
-        @text_input("Talk Settings", self.label, default=self.settings.name or f"{interaction.user.display_name}s Talk", max_length=20)
+        @text_input("Talk Settings", self.label, default=self.settings.name or f"{interaction.user.display_name}s Talk", max_length=100)
         async def modal(interaction: discord.Interaction, reply: str):
             self.settings.name = reply if reply else None
             await self.orig_interaction.edit_original_response(content=self.settings.message())
             await interaction.response.defer()
+            self.settings.unsaved = True
         
         await interaction.response.send_modal(modal())
     
 class applyButton(discord.ui.Button):
-    def __init__(self, settings: talkSettings):
+    def __init__(self, settings: talkSettings, orig_interaction: discord.Interaction):
         self.settings = settings
+        self.orig_interaction = orig_interaction
         super().__init__(style=discord.ButtonStyle.green, label="Apply")
     
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
+        self.settings.unsaved = False
+        await self.orig_interaction.edit_original_response(content=self.settings.message())
         ratelimit_message_task = bot.loop.create_task(self.message_ratelimit(interaction))
         await self.settings.apply(interaction)
         ratelimit_message_task.cancel()
@@ -225,7 +231,7 @@ class talkCommand(discord.app_commands.Group):
         view.add_item(toggleButton("Soundboard", settings, "soundboard", interaction))
         view.add_item(changeNameButton("Name", settings, "name", interaction))
         view.add_item(toggleButton("Banlist Mode", settings, "banlist_is_whitelist", interaction))
-        view.add_item(applyButton(settings))
+        view.add_item(applyButton(settings, interaction))
         await interaction.response.send_message(message, ephemeral=True, view=view)
 
 class banlistCommand(discord.app_commands.Group):
