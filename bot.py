@@ -101,7 +101,7 @@ async def logs(interaction: discord.Interaction):
 
 @discord.app_commands.command(name="version", description="Get the current version number")
 async def version(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Running Version {VERSION}")
+    await interaction.response.send_message(f"Running Version {VERSION}", ephemeral=True)
 
 @bot.event
 async def on_ready():
