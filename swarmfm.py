@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import time
+import asyncio
 
 bot: commands.Bot = None # This should be overwritten by the importing script
 
@@ -61,9 +62,9 @@ class swarmfmCommand(discord.app_commands.Group):
         if time.time() > valid_until:
             return
         if err:
-            interaction.followup.send(content=f"The Player exited with an exception: {err}", ephemeral=True)
+            asyncio.run_coroutine_threadsafe(interaction.followup.send(content=f"The Player exited with an exception: {err}", ephemeral=True), bot.loop)
         else:
-            interaction.followup.send(content=":warning: The Stream was not found. Please try again later.", ephemeral=True)
+            asyncio.run_coroutine_threadsafe(interaction.followup.send(content=":warning: The Stream was not found. Please try again later.", ephemeral=True), bot.loop)
 
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     # Conditions
