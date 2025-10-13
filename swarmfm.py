@@ -23,7 +23,8 @@ class swarmfmCommand(discord.app_commands.Group):
         if interaction.guild.voice_client == None:
             await vc.connect()
         
-        interaction.guild.voice_client.play(source, after=lambda err: self.on_disconnect(interaction, time.time()+10, err))
+        on_diconnect_timeout = time.time()+10
+        interaction.guild.voice_client.play(source, after=lambda err: self.on_disconnect(interaction, on_diconnect_timeout, err), signal_type="music", expected_packet_loss=0.25)
         await interaction.followup.send(":white_check_mark: Playing Swarm Fm", ephemeral=True)
 
     @discord.app_commands.command(name="leave", description="Leave the VC")
@@ -46,7 +47,8 @@ class swarmfmCommand(discord.app_commands.Group):
 
         source = self.get_stream(url)
         
-        interaction.guild.voice_client.play(source, after=lambda err: self.on_disconnect(interaction, time.time()+10, err))
+        on_diconnect_timeout = time.time()+10
+        interaction.guild.voice_client.play(source, after=lambda err: self.on_disconnect(interaction, on_diconnect_timeout, err), signal_type="music", expected_packet_loss=0.25)
         await interaction.followup.send(":white_check_mark: Reloaded Player!", ephemeral=True)
 
     def get_stream(self, url: str|None=None) -> discord.FFmpegPCMAudio:
