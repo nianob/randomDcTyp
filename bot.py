@@ -21,7 +21,7 @@ logging.basicConfig(
         logging.StreamHandler()          # Log to the terminal
     ]
 )
-                
+
 def save_storage():
     # saving then renaming is safer than overwriting
     with open("storage_copy.json", "w") as f:
@@ -33,6 +33,10 @@ def save_storage():
 def ensureKey(dictionary: dict[str, any], name: str, default_value: any):
     if name not in dictionary.keys():
         dictionary[name] = default_value
+
+if os.path.exists("storage_copy.json") and not os.path.exists("storage.json"):
+    logging.warning("sorage.json doesn't exist bur storage_copy does, the bot may have crashed during saving, restoring from storage_copy!")
+    os.rename("storage_copy.json", "storage.json")
 
 try:
     with open("storage.json", "r") as f:
