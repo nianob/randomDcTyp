@@ -4,6 +4,7 @@ import json
 import sys
 import logging
 import os
+from typing import Any
 
 import uno
 import wordle
@@ -30,7 +31,7 @@ def save_storage():
         os.remove("storage.json")
     os.rename("storage_copy.json", "storage.json")
 
-def ensureKey(dictionary: dict[str, any], name: str, default_value: any):
+def ensureKey(dictionary: dict[str, Any], name: str, default_value: Any):
     if name not in dictionary.keys():
         dictionary[name] = default_value
 
@@ -61,16 +62,25 @@ class OwnerCommand(discord.app_commands.Group):
 
     @discord.app_commands.command(name="toggle", description="Toggle your Owner role")
     async def toggle(self, interaction: discord.Interaction):
-        channel = interaction.user
+        member = interaction.user
+        if not isinstance(member, discord.Member):
+            await interaction.response.send_message("Something went wrong.", ephemeral=True)
+            return
+        if not interaction.guild:
+            await interaction.response.send_message("Something went wrong.", ephemeral=True)
+            return
         ownerRole = interaction.guild.get_role(1000353494533951558)
-        if ownerRole in channel.roles:
-            storage["hiddenOwners"].append(channel.id)
+        if not ownerRole:
+            await interaction.response.send_message("Something went wrong.", ephemeral=True)
+            return
+        if ownerRole in member.roles:
+            storage["hiddenOwners"].append(member.id)
             save_storage()
-            await channel.remove_roles(ownerRole, reason="User toggled Owner role")
+            await member.remove_roles(ownerRole, reason="User toggled Owner role")
             await interaction.response.send_message(f"You have toggled off your Owner role.", ephemeral=True)
-        elif channel.id in storage["hiddenOwners"]:
-            await channel.add_roles(ownerRole, reason="Uesr toggled Owner role")
-            storage["hiddenOwners"].remove(channel.id)
+        elif member.id in storage["hiddenOwners"]:
+            await member.add_roles(ownerRole, reason="Uesr toggled Owner role")
+            storage["hiddenOwners"].remove(member.id)
             save_storage()
             await interaction.response.send_message(f"You have toggled on your Owner role.", ephemeral=True)
         else:
@@ -170,6 +180,8 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     # Moved out of AFK talk
     if before.channel and after.channel and (before.channel.id == afk_channel_id) ^ (after.channel.id == afk_channel_id):
         mover = await was_moved_by_admin(guild, member)
+        if not bot.user:
+            return
         if mover and mover.id != member.id and mover.id != bot.user.id:
             # Unauthorized move out of AFK talk
             await member.move_to(before.channel)

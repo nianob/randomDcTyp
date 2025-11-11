@@ -2,7 +2,7 @@ import random
 import time
 import discord
 import asyncio
-from typing import Literal
+from typing import Literal, Optional
 
 async def close_idle_games():
     while True:
@@ -34,14 +34,14 @@ class Wordle():
         self.tries = []
         self.guessed = False
         self.expire = int(((time.time()+630)//60)*60)
-        self.lastMessage = discord.Message
+        self.lastMessage: discord.Message
     
-    def get_correct(self, guess: str) -> list[int]:
+    def get_correct(self, guess: str) -> list[str]:
         correct = "✓"
         half = "~"
         wrong = "X"
-        tmpWord = list(self.word)
-        out = [None, None, None, None, None]
+        tmpWord: list[Optional[str]] = list(self.word)
+        out: list[Optional[str]] = [None, None, None, None, None]
         # check correct
         if guess == self.word:
             self.guessed = True
@@ -60,7 +60,10 @@ class Wordle():
         for x, g in enumerate(out):
             if not g:
                 out[x] = wrong
-        return out
+        if None in out:
+            raise ValueError
+        final: list[str] = out # pyright: ignore[reportAssignmentType]
+        return final
 
     def validate(self, word: str) -> bool:
         return ((word in validwordlist_en) or (word in validwordlist_de)) if self.lang == 'mx' else (word in (validwordlist_en if self.lang == 'en' else validwordlist_de))
@@ -113,6 +116,8 @@ class WordleCommand(discord.app_commands.Group):
     @discord.app_commands.command(name="start", description="Create a new Game")
     @discord.app_commands.describe(language="The Language you want to play in")
     async def start(self, interaction: discord.Interaction, language: Literal["English", "Deutsch", "Mixed"]):
+        if not interaction.channel:
+            raise ValueError
         channel = interaction.channel.id
         if not channel in ongoing.keys():
             game = Wordle({'English': 'en', 'Deutsch': 'de', 'Mixed': 'mx'}[language])
@@ -124,6 +129,8 @@ class WordleCommand(discord.app_commands.Group):
     
     @discord.app_commands.command(name="show", description="Show the currently running Wordle")
     async def show(self, interaction: discord.Interaction):
+        if not interaction.channel:
+            raise ValueError
         channel = interaction.channel.id
         if not channel in ongoing.keys():
             await interaction.response.send_message(f"There is no running game here!", ephemeral=True)
