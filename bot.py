@@ -11,8 +11,8 @@ import wordle
 import vc
 import swarmfm
 import talk
+import customtypes as types
 
-nianob = 719900345383518209
 
 logging.basicConfig(
     level=logging.INFO,  # Set the logging level
@@ -35,21 +35,33 @@ def ensureKey(dictionary: dict[str, Any], name: str, default_value: Any):
     if name not in dictionary.keys():
         dictionary[name] = default_value
 
+def insertToTypedDict(dictionary: dict[str, Any], defaults: types.AnyDict) -> types.AnyDict:
+    outDict: types.AnyDict = {} # pyright: ignore[reportAssignmentType]
+    for key, value in defaults.items():
+        if key in dictionary:
+            outDict[key] = dictionary[key]
+        else:
+            outDict[key] = value
+    return outDict
+
+if not os.path.exists("config.json") and os.path.exists("config_template.jsonc"):
+    raise FileNotFoundError("Please create config.json from config_template.jsonc before launching this bot.")
+with open("config.json", "r") as f:
+    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None}
+    config: types.Config = insertToTypedDict(json.load(f), defaultConfig)
+
+owner = config["owner"]
+
 if os.path.exists("storage_copy.json") and not os.path.exists("storage.json"):
     logging.warning("sorage.json doesn't exist bur storage_copy does, the bot may have crashed during saving, restoring from storage_copy!")
     os.rename("storage_copy.json", "storage.json")
 
+defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}}
 try:
     with open("storage.json", "r") as f:
-        storage = json.load(f)
+        storage: types.Storage = insertToTypedDict(json.load(f), defaultStorage)
 except:
-    storage = {}
-
-ensureKey(storage, "hiddenOwners", [])
-ensureKey(storage, "vc_points", {})
-ensureKey(storage, "max_vc_points", {})
-ensureKey(storage, "shops", {})
-ensureKey(storage, "talks", {})
+    storage = defaultStorage
 save_storage()
 
 with open("version.txt", "r") as f:
@@ -63,13 +75,10 @@ class OwnerCommand(discord.app_commands.Group):
     @discord.app_commands.command(name="toggle", description="Toggle your Owner role")
     async def toggle(self, interaction: discord.Interaction):
         member = interaction.user
-        if not isinstance(member, discord.Member):
+        if not isinstance(member, discord.Member) or not interaction.guild or not config["ownerRole"]:
             await interaction.response.send_message("Something went wrong.", ephemeral=True)
             return
-        if not interaction.guild:
-            await interaction.response.send_message("Something went wrong.", ephemeral=True)
-            return
-        ownerRole = interaction.guild.get_role(1000353494533951558)
+        ownerRole = interaction.guild.get_role(config["ownerRole"])
         if not ownerRole:
             await interaction.response.send_message("Something went wrong.", ephemeral=True)
             return
@@ -95,7 +104,7 @@ class ClearLogsButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Clear Logs", style=discord.ButtonStyle.danger)
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != nianob:
+        if interaction.user.id != owner:
             await interaction.response.send_message(f"Sorry, but you don't have permission to do this!", ephemeral=True)
             return
         with open("bot.log", "w") as f:
@@ -105,7 +114,7 @@ class ClearLogsButton(discord.ui.Button):
 
 @discord.app_commands.command(name="logs", description="Get the current log file")
 async def logs(interaction: discord.Interaction):
-    if interaction.user.id != nianob:
+    if interaction.user.id != owner:
         await interaction.response.send_message(f"Sorry, but you don't have permission to do this!", ephemeral=True)
         return
     view = discord.ui.View(timeout=300)
@@ -119,14 +128,16 @@ async def version(interaction: discord.Interaction):
 
 @bot.event
 async def on_ready():
-    global ggc
+    global myServer
     if not bot.tree.get_command('logs'): # Bot has not initialized commands
-
-        try:
-            ggc = await bot.fetch_guild(999967735326978078)
-            await vc.finish_init()
-        except discord.errors.NotFound:
-            ggc = None
+        if config["dedicatedServer"]:
+            try:
+                myServer = await bot.fetch_guild(config["dedicatedServer"])
+                await vc.finish_init(myServer)
+            except discord.errors.NotFound:
+                myServer = None
+        else:
+            myServer = None
 
         # General Commands
         bot.tree.add_command(logs)
@@ -137,14 +148,16 @@ async def on_ready():
         bot.tree.add_command(talk.talkCommand())
         await bot.tree.sync()
 
-        # GGC Only Commands
-        if ggc:
-            logging.warning("GGC Not Found")
-            bot.tree.add_command(vc.vcCommand(), guild=ggc)
-            bot.tree.add_command(OwnerCommand(), guild=ggc)
-            await bot.tree.sync(guild=ggc)
-            
-            bot.loop.create_task(vc.reward(bot))
+        # Ownn Server Only Commands
+        if myServer:
+            if config["ownerRole"]:
+                bot.tree.add_command(OwnerCommand(), guild=myServer)
+            if config["pointBringingVcs"] and config["dedicatedServer"]:
+                bot.tree.add_command(vc.vcCommand(), guild=myServer)
+                bot.loop.create_task(vc.reward(bot, config["pointBringingVcs"], config["dedicatedServer"]))
+            await bot.tree.sync(guild=myServer)
+        else:
+            logging.warning(f"Server {config['dedicatedServer']} Not Found")
 
         bot.loop.create_task(wordle.close_idle_games())
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")
@@ -174,18 +187,20 @@ async def was_moved_by_admin(guild: discord.Guild, member: discord.Member):
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     await swarmfm.on_voice_state_update(member, before, after)
     await talk.on_voice_state_update(member, before, after)
-    afk_channel_id = 1392955385908039701
     guild = member.guild
 
     # Moved out of AFK talk
-    if before.channel and after.channel and (before.channel.id == afk_channel_id) ^ (after.channel.id == afk_channel_id):
+    if before.channel and after.channel and (before.channel.id == config["afkChannel"]) ^ (after.channel.id == config["afkChannel"]):
         mover = await was_moved_by_admin(guild, member)
-        if not bot.user:
+        if not bot.user or not mover:
             return
-        if mover and mover.id != member.id and mover.id != bot.user.id:
+        if mover.id != member.id and mover.id != bot.user.id:
             # Unauthorized move out of AFK talk
             await member.move_to(before.channel)
             await mover.send("Sorry, but you cannot move a user out of or into the AFK talk.")
+        if member.id == bot.user.id and (mover.id != bot.user.id and mover.id != owner):
+            await member.move_to(before.channel)
+            await mover.send("Sorry, but you cannot move me.")
 
 run_on_boot = True
 uno.bot = bot
@@ -193,6 +208,9 @@ vc.save_storage = save_storage
 vc.storage = storage
 vc.bot = bot
 vc.logging = logging
+vc.owner = owner
+vc.afkChannel = config["afkChannel"]
+vc.altAccRole = config["altRole"]
 swarmfm.bot = bot
 talk.bot = bot
 talk.save_storage = save_storage

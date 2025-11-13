@@ -26,6 +26,7 @@ Thumbs.db
 # Storage files
 crash.json
 storage.json
+config.json
 bot_token.hidden.txt
 
 # Local update files
