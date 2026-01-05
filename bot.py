@@ -218,7 +218,7 @@ talk.storage = storage
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
     token = f.read()
-if (not "--autostarted" in sys.argv) or config["disabled"]:
+if (not "--autostarted" in sys.argv) or (not config["disabled"]):
     bot.run(token, log_handler=None)
 logging.info("Exiting.")
 if len(wordle.ongoing):
