@@ -47,7 +47,7 @@ def insertToTypedDict(dictionary: dict[str, Any], defaults: types.AnyDict) -> ty
 if not os.path.exists("config.json") and os.path.exists("config_template.jsonc"):
     raise FileNotFoundError("Please create config.json from config_template.jsonc before launching this bot.")
 with open("config.json", "r") as f:
-    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None}
+    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None, "disabled": None}
     config: types.Config = insertToTypedDict(json.load(f), defaultConfig)
 
 owner = config["owner"]
@@ -202,7 +202,6 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             await member.move_to(before.channel)
             await mover.send("Sorry, but you cannot move me.")
 
-run_on_boot = True
 uno.bot = bot
 vc.save_storage = save_storage
 vc.storage = storage
@@ -219,7 +218,7 @@ talk.storage = storage
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
     token = f.read()
-if (not "--autostarted" in sys.argv) or run_on_boot:
+if (not "--autostarted" in sys.argv) or config["disabled"]:
     bot.run(token, log_handler=None)
 logging.info("Exiting.")
 if len(wordle.ongoing):

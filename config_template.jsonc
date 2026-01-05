@@ -8,5 +8,6 @@
     "ownerRole": null, // The Role ID of the Owner Role
     "pointBringingVcs": null, // List of all talks, that can bring Vc Points
     "altRole": null, // The ID of the role for alt accounts
-    "afkChannel": null // The ID of AFK Channel
+    "afkChannel": null, // The ID of AFK Channel
+    "disabled": null // Is the bot disabled and shouldnt start? Defaults to false
 }
