@@ -1,0 +1,12 @@
+// This is a temlate for the config.json file.
+// You probably want to copy it to config.json and adjust the settings to your needs.
+// All values that are 'null' are can be adjusted. If you leave them null,
+// some associated commands will be disabled. You can also leave out those options.
+{
+    "owner": 0, // The user ID of the Owner of the bot
+    "dedicatedServer": null, // The server ID, the bot is dedicated to
+    "ownerRole": null, // The Role ID of the Owner Role
+    "pointBringingVcs": null, // List of all talks, that can bring Vc Points
+    "altRole": null, // The ID of the role for alt accounts
+    "afkChannel": null // The ID of AFK Channel
+}

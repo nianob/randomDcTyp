@@ -9,8 +9,11 @@ save_storage: Any # This should be overwritten by the importing script
 storage: Any # This should be overwritten by the importing script
 bot: commands.Bot # This should be overwritten by the importing script
 logging: Any # This should be overwritten by the importing script
+owner: int # This should be overwritten by the importing script
+afkChannel: Optional[int] # This should be overwritten by the importing script
+altAccRole: Optional[int] # This should be overwritten by the importing script
 
-ggc: discord.Guild
+myServer: discord.Guild
 shops: dict[str, "Shop"] = {}
 user_cache: dict[int, discord.User|discord.Member] = {}
 repoted: dict[int, int] = {}
@@ -50,7 +53,7 @@ async def getMember(id: int):
     if id in user_cache.keys():
         return user_cache[id]
     try:
-        user = await ggc.fetch_member(id)
+        user = await myServer.fetch_member(id)
     except:
         return None
     user_cache[id] = user
@@ -123,7 +126,7 @@ async def send_challenge(member: discord.Member):
     await asyncio.sleep(180)
     if not reacted.value and member.voice:
         await member.send("Du hast zu lange gebraucht!")
-        afk = await ggc.fetch_channel(1392955385908039701)
+        afk = await myServer.fetch_channel(1392955385908039701)
         if isinstance(afk, (discord.VoiceChannel, discord.StageChannel)):
             await member.move_to(afk, reason="User didn't respond to warning in a timely manner")
 
@@ -403,8 +406,8 @@ class vcCommand(discord.app_commands.Group):
         pointlist: dict[str, int] = storage["vc_points"]
         uid = interaction.user.id
         points: int = pointlist.get(str(uid), 0)
-        alt_acc = ggc.get_role(1395054981685575680) in interaction.user.roles
-        alt_acc_msg = "\n:warning: Your Account was flagged as being an **alt account** and is therefore are unable to recieve any points. If you believe this is a mistake please contact <@719900345383518209>." if alt_acc else ""
+        alt_acc = myServer.get_role(altAccRole) in interaction.user.roles if altAccRole else False
+        alt_acc_msg = f"\n:warning: Your Account was flagged as being an **alt account** and is therefore are unable to recieve any points. If you believe this is a mistake please contact <@{owner}>." if alt_acc else ""
         shop_msg = "\nYou can make **your own shop** using `/vc myshop`." if points >= 100 else "\nWhen you reach **100 VC-Points** you can make your own shop."
         await interaction.response.send_message(f"You get VC-Points for being in one of the four gaming talks if you aren't full-muted. You get **1 point a minute**.\nYou currently have **{points} VC-Points**.\n You can buy stuff from other users by doing `/vc shop`.{shop_msg}{alt_acc_msg}", ephemeral=True)
     
@@ -486,10 +489,10 @@ class vcCommand(discord.app_commands.Group):
 
     @discord.app_commands.command(name="afk", description="Report a user as being AFK")
     async def afk(self, interaction: discord.Interaction, user: discord.Member):
-        if user.id == 1125488188752941097:
+        if bot.user and user.id == bot.user.id:
             await interaction.response.send_message("Serafim ist cool :dark_sunglasses:", ephemeral=True)
             return
-        if not user.voice or not user.voice.channel or user.voice.channel.id == 1392955385908039701:
+        if not user.voice or not user.voice.channel or user.voice.channel.id == afkChannel:
             await interaction.response.send_message(f":x: {user.mention} is not in a talk.", ephemeral=True)
             return
         if time.time() - repoted.get(user.id, 0) < 3600:
@@ -521,7 +524,7 @@ class vcCommand(discord.app_commands.Group):
 
     @discord.app_commands.command(name="manage", description="Manage VC-Points")
     async def manage(self, interaction: discord.Interaction, user: discord.Member):
-        if interaction.user.id != 719900345383518209:
+        if interaction.user.id != owner:
             await interaction.response.send_message(":x: Sorry, but you can't do that!", ephemeral=True)
             return
         pointlist: dict[str, int] = storage["vc_points"]
@@ -537,18 +540,18 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points", ephemeral=True)
         await interaction.response.send_modal(ui())
 
-async def reward(bot: commands.Bot):
+async def reward(bot: commands.Bot, pointBringingVcs: list[int], server_id: int):
     while True:
         num_intalk = 0
         try:
-            ggc = bot.get_guild(999967735326978078)
-            if not ggc:
+            server = bot.get_guild(server_id)
+            if not server:
                 return
-            alt_acc = ggc.get_role(1395054981685575680)
-            members = ggc.members
+            alt_acc = server.get_role(altAccRole) if altAccRole else None
+            members = server.members
             for member in members:
-                if member.voice and member.voice.channel and not member.bot and alt_acc not in member.roles:
-                    if member.voice.channel.id in [1000001475780562955, 1215272292725301308, 1388208911491797053, 1215272388518875156, 1395335634155212850] and not member.voice.self_deaf:
+                if member.voice and member.voice.channel and not member.bot and (not altAccRole or alt_acc not in member.roles):
+                    if member.voice.channel.id in pointBringingVcs and not member.voice.self_deaf:
                         num_intalk += 1
                         if str(member.id) in storage["vc_points"].keys():
                             points = storage["vc_points"][str(member.id)]
@@ -567,9 +570,9 @@ async def reward(bot: commands.Bot):
         delay = -time.time()%60
         await asyncio.sleep(delay)
 
-async def finish_init():
-    global ggc
-    ggc = await bot.fetch_guild(999967735326978078)
+async def finish_init(server: discord.Guild):
+    global myServer
+    myServer = server
     for uid in storage["shops"]:
         user = await getMember(int(uid))
         if user:
