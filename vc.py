@@ -3,18 +3,22 @@ from discord.ext import commands
 import asyncio
 import regex
 import time
+from typing import Any, Optional, Callable, Coroutine
 
-save_storage: any = None # This should be overwritten by the importing script
-storage: any = None # This should be overwritten by the importing script
-bot: commands.Bot = None # This should be overwritten by the importing script
-logging: any = None # This should be overwritten by the importing script
+save_storage: Any # This should be overwritten by the importing script
+storage: Any # This should be overwritten by the importing script
+bot: commands.Bot # This should be overwritten by the importing script
+logging: Any # This should be overwritten by the importing script
+owner: int # This should be overwritten by the importing script
+afkChannel: Optional[int] # This should be overwritten by the importing script
+altAccRole: Optional[int] # This should be overwritten by the importing script
 
+myServer: discord.Guild
 shops: dict[str, "Shop"] = {}
-user_cache: dict[int, discord.User] = {}
-ggc: discord.Guild = None
+user_cache: dict[int, discord.User|discord.Member] = {}
 repoted: dict[int, int] = {}
 
-def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None, style: discord.TextStyle = discord.TextStyle.short):
+def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: Optional[int] = None, max_length: Optional[int] = None, style: discord.TextStyle = discord.TextStyle.short):
     """
     Example usage:
     ```
@@ -36,6 +40,11 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
         return Modal
     return decorator
 
+def disabled(func: Callable) -> Callable[[discord.Interaction], Coroutine[Any, Any, None]]:
+    async def wrapper(interaction: discord.Interaction):
+        await interaction.response.send_message(":warning: This Command is currently disabled, because of some issues", ephemeral=True)
+    return wrapper
+
 def button(label = None, style = discord.ButtonStyle.primary):
     def decorator(func):
         class Button(discord.ui.Button):
@@ -49,7 +58,7 @@ async def getMember(id: int):
     if id in user_cache.keys():
         return user_cache[id]
     try:
-        user = await ggc.fetch_member(id)
+        user = await myServer.fetch_member(id)
     except:
         return None
     user_cache[id] = user
@@ -122,8 +131,9 @@ async def send_challenge(member: discord.Member):
     await asyncio.sleep(180)
     if not reacted.value and member.voice:
         await member.send("Du hast zu lange gebraucht!")
-        afk = await ggc.fetch_channel(1392955385908039701)
-        await member.move_to(afk, reason="User didn't respond to warning in a timely manner")
+        afk = await myServer.fetch_channel(1392955385908039701)
+        if isinstance(afk, (discord.VoiceChannel, discord.StageChannel)):
+            await member.move_to(afk, reason="User didn't respond to warning in a timely manner")
 
 class BestListButton(discord.ui.Button):
     def __init__(self, label: str, pageNumber: int, original_interaction: discord.Interaction):
@@ -173,11 +183,11 @@ class Shop:
     class EditItemUi(discord.ui.Modal):
         def __init__(self,  orig_interaction: discord.Interaction, item: "Shop.Item|None" = None, shop: "Shop|None" = None):
             "The UI for editing an Item. use the `shop` variable instead of `item` to create a new Item"
-            if item == None and shop == None:
+            if (not item) and (not shop):
                 raise ValueError("Either item or shop must be defined")
             super().__init__(title="Edit Shop Item")
             self.orig_interaction = orig_interaction
-            self.item = item or Shop.Item(None, shop)
+            self.item = item or Shop.Item(None, shop) # pyright: ignore[reportArgumentType]
             self.shop = shop
             self.titl = discord.ui.TextInput(label="Title (Leave Empty to delete this Item)", default=self.item.title, placeholder="My Shop Item", required=False, min_length=5, max_length=40)
             self.desc = discord.ui.TextInput(label="Description", default=self.item.desc, placeholder="Describe your Shop Item", required=False, min_length=0, max_length=300, style=discord.TextStyle.paragraph)
@@ -223,8 +233,9 @@ class Shop:
                 return
             self.item.title = title
             self.item.desc = desc
-            self.item.cost = cost
-            self.item.aval = aval
+            self.item.cost = int(cost)
+            if aval:
+                self.item.aval = aval
 
             self.item.shop.save()
             await interaction.response.send_message(f":white_check_mark: Successfully updated {self.item.title}!", ephemeral=True, delete_after=3)
@@ -290,7 +301,7 @@ class Shop:
                 self.shop.save()
                 await interaction.response.send_message(":white_check_mark: You got an Extra Slot!", ephemeral=True)
                 message, view = self.shop.menu(self.orig_interaction, True)
-                self.orig_interaction.edit_original_response(content=message, view=view)
+                await self.orig_interaction.edit_original_response(content=message, view=view)
             else:
                 await interaction.response.send_message(":x: An Error Occured", ephemeral=True)
 
@@ -342,7 +353,7 @@ class Shop:
         for item in self.items:
             items.append(f"{':green_circle:' if item.aval else ':red_circle:'} {str(item)}")
             if not edit:
-                view.add_item(Shop.BuyButton(item, orig_interaction, item.aval and myPoints >= item.cost))
+                view.add_item(Shop.BuyButton(item, orig_interaction, (item.aval and myPoints) >= item.cost))
             else:
                 view.add_item(Shop.EditButton(item, orig_interaction))
         if not self.items:
@@ -360,10 +371,16 @@ class Shop:
     
     def get_base_slots(self):
         points = storage["max_vc_points"][str(self.owner.id)]
+        key = None
+        base_slots = None
         for key in self.base_slots:
             if key > points:
                 base_slots = self.base_slots[key]-1
                 break
+        if not key:
+            raise ValueError
+        if not base_slots:
+            raise ValueError
         return key, base_slots
 
     def get_slotcount(self):
@@ -388,17 +405,21 @@ class vcCommand(discord.app_commands.Group):
         super().__init__(name="vc", description="Commands for your VC-Points")
     
     @discord.app_commands.command(name="info", description="Get information about VC-Points")
+    @disabled
     async def info(self, interaction: discord.Interaction):
+        if isinstance(interaction.user, discord.User):
+            raise ValueError
         pointlist: dict[str, int] = storage["vc_points"]
         uid = interaction.user.id
         points: int = pointlist.get(str(uid), 0)
-        alt_acc = ggc.get_role(1395054981685575680) in interaction.user.roles
-        alt_acc_msg = "\n:warning: Your Account was flagged as being an **alt account** and is therefore are unable to recieve any points. If you believe this is a mistake please contact <@719900345383518209>." if alt_acc else ""
+        alt_acc = myServer.get_role(altAccRole) in interaction.user.roles if altAccRole else False
+        alt_acc_msg = f"\n:warning: Your Account was flagged as being an **alt account** and is therefore are unable to recieve any points. If you believe this is a mistake please contact <@{owner}>." if alt_acc else ""
         shop_msg = "\nYou can make **your own shop** using `/vc myshop`." if points >= 100 else "\nWhen you reach **100 VC-Points** you can make your own shop."
         await interaction.response.send_message(f"You get VC-Points for being in one of the four gaming talks if you aren't full-muted. You get **1 point a minute**.\nYou currently have **{points} VC-Points**.\n You can buy stuff from other users by doing `/vc shop`.{shop_msg}{alt_acc_msg}", ephemeral=True)
     
     @discord.app_commands.command(name="check", description="Check how many points the user has.")
-    async def check(self, interaction: discord.Interaction, user: discord.Member = None):
+    @disabled
+    async def check(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         pointlist: dict[str, int] = storage["vc_points"]
         u = user if user else interaction.user
         points: int = pointlist.get(str(u.id), 0)
@@ -408,7 +429,8 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(f"{u.mention} currently has **{points} VC-Point{'s' if points != 1 else ''}**.", ephemeral=True)
 
     @discord.app_commands.command(name="points", description="Check how many points the user has.")
-    async def points(self, interaction: discord.Interaction, user: discord.Member = None):
+    @disabled
+    async def points(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         pointlist: dict[str, int] = storage["vc_points"]
         u = user if user else interaction.user
         points: int = pointlist.get(str(u.id), 0)
@@ -418,6 +440,7 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(f"{u.mention} currently has **{points} VC-Point{'s' if points != 1 else ''}**.", ephemeral=True)
     
     @discord.app_commands.command(name="best", description="See the top VC-Point holders")
+    @disabled
     async def best(self, interaction: discord.Interaction):
         msg = getBestListWithContext(interaction, range(10))
         view = discord.ui.View()
@@ -426,7 +449,8 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(f"Top VC-Point holders:\n{msg}", view=view, ephemeral=True)
     
     @discord.app_commands.command(name="shop", description="View a pointshop")
-    async def shop(self, interaction: discord.Interaction, user: discord.Member = None):
+    @disabled
+    async def shop(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         if user == None:
             names = []
             view = discord.ui.View()
@@ -444,10 +468,13 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(message, view=view, ephemeral=True)
     
     @discord.app_commands.command(name="myshop", description="Edit your pointshop")
+    @disabled
     async def myshop(self, interaction: discord.Interaction):
         if str(interaction.user.id) in shops.keys():
             shop = shops[str(interaction.user.id)]
         else:
+            if isinstance(interaction.user, discord.User):
+                raise ValueError
             if storage["max_vc_points"].get(str(interaction.user.id), 0) < 100:
                 await interaction.response.send_message("You don't have enough points to make a shop yet :frowning_face:\nCome back when you have **100 VC-Points**!", ephemeral=True)
                 return
@@ -458,6 +485,7 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(message, view=view, ephemeral=True)
     
     @discord.app_commands.command(name="partent", description="Kaufe dir ein Partent")
+    @disabled
     async def partent(self, interaction: discord.Interaction):
         if storage["vc_points"].get(str(interaction.user.id), 0) < 500:
             await interaction.response.send_message("Sorry, but you don't have enough points to do that! You need 500.", ephemeral=True)
@@ -465,6 +493,7 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_modal(partent())
     
     @discord.app_commands.command(name="partents", description="Zeige dir alle Partente an")
+    @disabled
     async def partents(self, interaction: discord.Interaction):
         message = ""
         for partent in storage["partents"]:
@@ -473,20 +502,24 @@ class vcCommand(discord.app_commands.Group):
 
     @discord.app_commands.command(name="afk", description="Report a user as being AFK")
     async def afk(self, interaction: discord.Interaction, user: discord.Member):
-        if user.id == 1125488188752941097:
+        if bot.user and user.id == bot.user.id:
             await interaction.response.send_message("Serafim ist cool :dark_sunglasses:", ephemeral=True)
             return
-        if not user.voice or user.voice.channel.id == 1392955385908039701:
+        if not afkChannel:
+            await interaction.response.send_message(f"I am sorry, but the AFK talk is not known by this bot, cannot continue.", ephemeral=True)
+            return
+        if not user.voice or not user.voice.channel or user.voice.channel.id == afkChannel:
             await interaction.response.send_message(f":x: {user.mention} is not in a talk.", ephemeral=True)
             return
         if time.time() - repoted.get(user.id, 0) < 3600:
             await interaction.response.send_message(f":x: {user.mention} has already recieved such a message in the last 60 minutes.", ephemeral=True)
             return
         await interaction.response.send_message(f":white_check_mark: Sent {user.mention} a Message, if they don't react within **3 minutes** they will me moved to AFK.", ephemeral=True)
-        repoted[user.id] = time.time()
+        repoted[user.id] = int(time.time())
         await send_challenge(user)
     
     @discord.app_commands.command(name="pay", description="Pay the user the specified amount of VC-Points")
+    @disabled
     async def pay(self, interaction: discord.Interaction, user: discord.Member, points: int):
         myPoints = storage["vc_points"].get(str(interaction.user.id), 0)
         if myPoints < points:
@@ -507,8 +540,9 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(f":white_check_mark: You transfered {points} VC-Points to {user.mention}.", ephemeral=True)
 
     @discord.app_commands.command(name="manage", description="Manage VC-Points")
+    @disabled
     async def manage(self, interaction: discord.Interaction, user: discord.Member):
-        if interaction.user.id != 719900345383518209:
+        if interaction.user.id != owner:
             await interaction.response.send_message(":x: Sorry, but you can't do that!", ephemeral=True)
             return
         pointlist: dict[str, int] = storage["vc_points"]
@@ -524,16 +558,19 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(f":white_check_mark: <@{user.id}> now has {reply} VC-Points", ephemeral=True)
         await interaction.response.send_modal(ui())
 
-async def reward(bot: commands.Bot):
+async def reward(bot: commands.Bot, pointBringingVcs: list[int], server_id: int):
+    return # This function is disabled too
     while True:
         num_intalk = 0
         try:
-            ggc = bot.get_guild(999967735326978078)
-            alt_acc = ggc.get_role(1395054981685575680)
-            members = ggc.members
+            server = bot.get_guild(server_id)
+            if not server:
+                return
+            alt_acc = server.get_role(altAccRole) if altAccRole else None
+            members = server.members
             for member in members:
-                if member.voice and not member.bot and alt_acc not in member.roles:
-                    if member.voice.channel.id in [1000001475780562955, 1215272292725301308, 1388208911491797053, 1215272388518875156, 1395335634155212850] and not member.voice.self_deaf:
+                if member.voice and member.voice.channel and not member.bot and (not altAccRole or alt_acc not in member.roles):
+                    if member.voice.channel.id in pointBringingVcs and not member.voice.self_deaf:
                         num_intalk += 1
                         if str(member.id) in storage["vc_points"].keys():
                             points = storage["vc_points"][str(member.id)]
@@ -552,10 +589,13 @@ async def reward(bot: commands.Bot):
         delay = -time.time()%60
         await asyncio.sleep(delay)
 
-async def finish_init():
-    global ggc
-    ggc = await bot.fetch_guild(999967735326978078)
+async def finish_init(server: discord.Guild):
+    global myServer
+    myServer = server
     for uid in storage["shops"]:
         user = await getMember(int(uid))
         if user:
+            if not isinstance(user, discord.Member):
+                logging.warning(f"User {user} is not a member!")
+                continue
             shops[uid] = Shop(storage["shops"][uid], user)

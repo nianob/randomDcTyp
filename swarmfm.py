@@ -2,8 +2,9 @@ import discord
 from discord.ext import commands
 import time
 import asyncio
+from typing import Optional
 
-bot: commands.Bot = None # This should be overwritten by the importing script
+bot: Optional[commands.Bot] = None # This should be overwritten by the importing script
 
 class swarmfmCommand(discord.app_commands.Group):
     def __init__(self):
@@ -13,24 +14,41 @@ class swarmfmCommand(discord.app_commands.Group):
     @discord.app_commands.describe(url="The URL of the stream")
     async def join(self, interaction: discord.Interaction, url: str|None=None):
         await interaction.response.defer(ephemeral=True)
+        if not isinstance(interaction.user, discord.Member):
+            return
         if not interaction.user.voice:
-            await interaction.response.send_message(":x: You are not in a VC!", ephemeral=True)
+            await interaction.followup.send(content=":x: You are not in a VC!", ephemeral=True)
+            return
+        if not interaction.user.voice.channel:
+            await interaction.followup.send(content="Something went wrong.", ephemeral=True)
+            return
+        if not interaction.guild:
+            await interaction.followup.send(content="Something went wrong.", ephemeral=True)
             return
         
         source = self.get_stream(url)
-        
-        vc: discord.VoiceChannel = interaction.user.voice.channel
+
+        vc: discord.VoiceChannel|discord.StageChannel = interaction.user.voice.channel
         if interaction.guild.voice_client == None:
             await vc.connect()
         
-        on_diconnect_timeout = time.time()+10
+        if not interaction.guild.voice_client:
+            await interaction.followup.send(content="Something went wrong.", ephemeral=True)
+            return
+        
+        on_diconnect_timeout = int(time.time()+10)
+        if not isinstance(interaction.guild.voice_client, discord.VoiceClient):
+            raise ValueError
         interaction.guild.voice_client.play(source, after=lambda err: self.on_disconnect(interaction, on_diconnect_timeout, err), signal_type="music", expected_packet_loss=0.25)
         await interaction.followup.send(":white_check_mark: Playing Swarm Fm", ephemeral=True)
 
     @discord.app_commands.command(name="leave", description="Leave the VC")
     async def leave(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            await interaction.response.send_message("Something went wrong.", ephemeral=True)
+            return
         if interaction.guild.voice_client:
-            await interaction.guild.voice_client.disconnect()
+            await interaction.guild.voice_client.disconnect(force=False)
             await interaction.response.send_message("Disconnected.", ephemeral=True)
         else:
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
@@ -38,30 +56,34 @@ class swarmfmCommand(discord.app_commands.Group):
     @discord.app_commands.command(name="reload", description="Reload the Stream")
     @discord.app_commands.describe(url="The URL of the stream")
     async def reload(self, interaction: discord.Interaction, url: str|None=None):
+        if not interaction.guild:
+            await interaction.response.send_message("Something went wrong.", ephemeral=True)
+            return
         if not interaction.guild.voice_client:
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
             return
         
         await interaction.response.defer(ephemeral=True)
+        if not isinstance(interaction.guild.voice_client, discord.VoiceClient):
+            raise ValueError
         interaction.guild.voice_client.stop()
 
         source = self.get_stream(url)
         
-        on_diconnect_timeout = time.time()+10
+        on_diconnect_timeout = int(time.time()+10)
         interaction.guild.voice_client.play(source, after=lambda err: self.on_disconnect(interaction, on_diconnect_timeout, err), signal_type="music", expected_packet_loss=0.25)
         await interaction.followup.send(":white_check_mark: Reloaded Player!", ephemeral=True)
 
-    def get_stream(self, url: str|None=None) -> discord.FFmpegPCMAudio:
+    def get_stream(self, url: str|None=None) -> discord.PCMVolumeTransformer[discord.FFmpegAudio]:
         if not url:
             url = "https://cast.sw.arm.fm/stream"
-        ffmpeg_options = {
-            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", "options": "-vn"
-        }
-        audio = discord.FFmpegPCMAudio(url, **ffmpeg_options)
+        audio = discord.FFmpegPCMAudio(url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", options="-vn")
         return discord.PCMVolumeTransformer(audio, volume=0.1)
     
     def on_disconnect(self, interaction: discord.Interaction, valid_until: int, err: Exception|None):
         if time.time() > valid_until:
+            return
+        if not bot:
             return
         if err:
             asyncio.run_coroutine_threadsafe(interaction.followup.send(content=f"The Player exited with an exception: {err}", ephemeral=True), bot.loop)
@@ -71,6 +93,10 @@ class swarmfmCommand(discord.app_commands.Group):
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     # Conditions
     if not (before.channel and not after.channel): # User leaves a talk
+        return
+    if not bot:
+        return
+    if not bot.user:
         return
     if member.id == bot.user.id: # User is not the bot
         return
@@ -82,4 +108,4 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         return
     
     # If all are true then disconnect from the vc
-    await before.channel.guild.voice_client.disconnect()
+    await before.channel.guild.voice_client.disconnect(force=False)

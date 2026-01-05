@@ -1,17 +1,21 @@
 import discord
 from discord.ext import commands
 import asyncio
+from typing import Optional, Any
 
-bot: commands.Bot = None # This should be overwritten by the importing script
-save_storage: any = None # This should be overwritten by the importing script
-storage: dict[str, any] = None # This should be overwritten by the importing script
+bot: commands.Bot # This should be overwritten by the importing script
+save_storage: Any # This should be overwritten by the importing script
+storage: dict[str, Any] # This should be overwritten by the importing script
 
-auto_delete_talks: dict[discord.VoiceChannel, int] = {}
-user_talks: dict[int, discord.VoiceChannel] = {}
+VocalChannel = discord.VoiceChannel|discord.StageChannel
+auto_delete_talks: dict[VocalChannel, int] = {}
+user_talks: dict[int, VocalChannel] = {}
 talk_roles: dict[int, discord.Role] = {}
 boolTexts = {False: "No", True: "Yes"}
 
 async def get_member(interaction: discord.Interaction, uid: int) -> discord.Member | None:
+    if not interaction.guild:
+        return None
     member = interaction.guild.get_member(uid)
     if member:
         return member
@@ -20,13 +24,13 @@ async def get_member(interaction: discord.Interaction, uid: int) -> discord.Memb
     except discord.NotFound:
         return None
 
-def from_value(dictionary: dict, item: any) -> any:
+def from_value(dictionary: dict, item: Any) -> Any:
     for key, value in dictionary.items():
         if value == item:
             return key
     raise ValueError(f"Item {item} not found in dictionary values")
 
-def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: int = None, max_length: int = None, style: discord.TextStyle = discord.TextStyle.short):
+def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: Optional[int] = None, max_length: Optional[int] = None, style: discord.TextStyle = discord.TextStyle.short):
     """
     Example usage:
     ```
@@ -51,7 +55,7 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
 class talkSettings:
     def __init__(self, user: int):
         self.soundboard: bool
-        self.name: str
+        self.name: Optional[str]
         self.banlist: list[int]
         self.banlist_is_whitelist: bool
         self.unsaved: bool = False
@@ -62,7 +66,7 @@ class talkSettings:
         else:
             self.load_default()
     
-    def load_data(self, storage: dict[str, any]):
+    def load_data(self, storage: dict[str, Any]):
         self.soundboard = storage["soundboard"]
         self.name = storage["name"]
         self.banlist = storage["banlist"]
@@ -111,6 +115,8 @@ class talkSettings:
             await asyncio.gather(*tasks)
 
     def get_overwrites(self, interaction: discord.Interaction, role: discord.Role):
+        if not interaction.guild:
+            raise ValueError("No guild provided")
         return {
             interaction.guild.default_role: discord.PermissionOverwrite(
                 use_soundboard = self.soundboard,
@@ -128,14 +134,16 @@ class talkSettings:
             }
 
     async def create_talk(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            raise ValueError("No Guild Provided")
         guild = interaction.guild
         category_names = [category.name for category in guild.categories]
         if "User Talks" in category_names:
             category = guild.categories[category_names.index("User Talks")]
         else:
             category = await guild.create_category("User Talks")
-        role = await interaction.guild.create_role(name=f"talk_{self.user}")
-        talk = await interaction.guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
+        role = await guild.create_role(name=f"talk_{self.user}")
+        talk = await guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
         await self.add_users_to_role(interaction, role)
         return talk, role
     
@@ -166,6 +174,7 @@ class toggleButton(discord.ui.Button):
 
 class changeNameButton(discord.ui.Button):
     def __init__(self, label: str, settings: talkSettings, varName: str, orig_interaction: discord.Interaction):
+        self.label: str
         self.settings = settings
         self.varName = varName
         self.orig_interaction = orig_interaction
