@@ -5,6 +5,7 @@ import asyncio
 import random
 import traceback
 import json
+from typing import Optional
 
 bot: commands.Bot # This should be overwritten by the importing script
 cards = ['r0', 'r1', 'r1', 'r2', 'r2', 'r3', 'r3', 'r4', 'r4', 'r5', 'r5', 'r6', 'r6', 'r7', 'r7', 'r8', 'r8', 'r9', 'r9', 'rx', 'rx', 'rr', 'rr', 'r+', 'r+', 'g0', 'g1', 'g1', 'g2', 'g2', 'g3', 'g3', 'g4', 'g4', 'g5', 'g5', 'g6', 'g6', 'g7', 'g7', 'g8', 'g8', 'g9', 'g9', 'gx', 'gx', 'gr', 'gr', 'g+', 'g+', 'b0', 'b1', 'b1', 'b2', 'b2', 'b3', 'b3', 'b4', 'b4', 'b5', 'b5', 'b6', 'b6', 'b7', 'b7', 'b8', 'b8', 'b9', 'b9', 'bx', 'bx', 'br', 'br', 'b+', 'b+', 'y0', 'y1', 'y1', 'y2', 'y2', 'y3', 'y3', 'y4', 'y4', 'y5', 'y5', 'y6', 'y6', 'y7', 'y7', 'y8', 'y8', 'y9', 'y9', 'yx', 'yx', 'yr', 'yr', 'y+', 'y+', 'c?', 'c?', 'c?', 'c?', 'c*', 'c*', 'c*', 'c*']
@@ -129,8 +130,15 @@ class Player():
             self.game.deck = self.game.stack[:-1]
             self.game.stack = [self.game.stack[-1]]
     
+    async def refreshButtons(self, interaction: discord.Interaction):
+        self.drawCardButton = self.DrawButton(self)
+        self.nextPlayerButton = self.NextButton(self)
+        for card in self.cards:
+            card.refreshButton()
+        await self.send_interaction(False, interaction)
+    
     @handleCrashes("game.message")
-    async def send_interaction(self):
+    async def send_interaction(self, editGlobalMessage: bool = True, interaction: Optional[discord.Interaction] = None):
         if self.game.ended:
             winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
             await self.game.close(f"{winner.mention} has won the Game!")
@@ -150,10 +158,14 @@ class Player():
         sep = "\n"
         if not self.game.message:
             raise ValueError
-        if not self.message:
-            raise ValueError
-        await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=None)
-        await self.message.edit(content=f"Your Cards:", view=view)
+        if editGlobalMessage:
+            globalView = discord.ui.View()
+            globalView.add_item(RefreshCardsButton(self.game))
+            await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
+        if self.message:
+            await self.message.edit(content=f"Your Cards:", view=view)
+        elif interaction:
+            self.message = await interaction.followup.send(content="Your Cards:", view=view, ephemeral=True)
 
 class Card():
     class Button(discord.ui.Button):
@@ -265,6 +277,9 @@ class Card():
         if lastCard.color != "c":
             return self.color == lastCard.color or self.value == lastCard.value or self.color == 'c'
         return self.color == "c" or self.color == lastCard.selectedColor
+    
+    def refreshButton(self):
+        self.button = self.Button(self.buttonStyle, self.symbol, self)
 
 class Settings():
     class setting():
@@ -460,6 +475,19 @@ class SettingsButton(discord.ui.Button):
                 self.game.settings.message = await interaction.followup.send(self.game.settings.get_message(), view=self.game.settings.view, ephemeral=True)
         else:
             await interaction.response.send_message(f"You are not in the game!", ephemeral=True)
+
+class RefreshCardsButton(discord.ui.Button):
+    def __init__(self, game: Uno):
+        self.game = game
+        super().__init__(label="Refresh your Message", style=discord.ButtonStyle.gray)
+    
+    @handleCrashes("game.message")
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user in self.game.players:
+            await interaction.response.send_message(f"You are not in the game!", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await self.game.gamePlayers[self.game.players.index(interaction.user)].refreshButtons(interaction)
 
 class UnoCommand(discord.app_commands.Group):
     def __init__(self):
