@@ -4,6 +4,8 @@ import json
 import sys
 import logging
 import os
+import datetime
+import gzip
 from typing import Any
 
 import uno
@@ -59,9 +61,20 @@ if os.path.exists("storage_copy.json") and not os.path.exists("storage.json"):
 defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}}
 try:
     with open("storage.json", "r") as f:
-        storage: types.Storage = insertToTypedDict(json.load(f), defaultStorage)
-except:
+        contents = f.read()
+        try:
+            if not os.path.exists("backups"):
+                os.mkdir("backups")
+            with gzip.open(f"backups/{datetime.datetime.now().strftime("%Y_%m_%d__%H%M%S.json.gz")}", "wb") as backupf:
+                backupf.write(contents.encode("utf-8"))
+        except Exception as e:
+            logging.error(f"Failed to create backup: {e}")
+        storage: types.Storage = insertToTypedDict(json.loads(contents), defaultStorage)
+except FileNotFoundError:
     storage = defaultStorage
+except json.JSONDecodeError:
+    logging.fatal("storage could not be read")
+    quit()
 save_storage()
 
 with open("version.txt", "r") as f:

@@ -29,6 +29,9 @@ storage.json
 config.json
 bot_token.hidden.txt
 
+# Backups
+backups/
+
 # Local update files
 update.sh
 update_checker.py
