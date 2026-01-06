@@ -77,9 +77,6 @@ except json.JSONDecodeError:
     quit()
 save_storage()
 
-with open("version.txt", "r") as f:
-    VERSION = f.read()
-
 
 class OwnerCommand(discord.app_commands.Group):
     def __init__(self):
@@ -135,10 +132,6 @@ async def logs(interaction: discord.Interaction):
     with open("bot.log", "rb") as f:
         await interaction.response.send_message("Here you go!", file=discord.File(f, "bot.log"), view=view)
 
-@discord.app_commands.command(name="version", description="Get the current version number")
-async def version(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Running Version {VERSION}", ephemeral=True)
-
 @bot.event
 async def on_ready():
     global myServer
@@ -154,7 +147,6 @@ async def on_ready():
 
         # General Commands
         bot.tree.add_command(logs)
-        bot.tree.add_command(version)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(swarmfm.swarmfmCommand())
@@ -171,6 +163,8 @@ async def on_ready():
             await bot.tree.sync(guild=myServer)
         else:
             logging.warning(f"Server {config['dedicatedServer']} Not Found")
+        
+        await talk.finish_init()
 
         bot.loop.create_task(wordle.close_idle_games())
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")

@@ -25,6 +25,8 @@ class TalkDict(TypedDict):
     name: Optional[str]
     banlist: list[int]
     banlist_is_whitelist: bool
+    current_id: Optional[int]
+    current_role_id: Optional[int]
 
 class Storage(TypedDict):
     hiddenOwners: list[int]

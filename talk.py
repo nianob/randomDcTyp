@@ -1,15 +1,17 @@
 import discord
 from discord.ext import commands
 import asyncio
-from typing import Optional, Any
+from typing import Optional, Any, Callable
+from customtypes import Storage, TalkDict
 
 bot: commands.Bot # This should be overwritten by the importing script
-save_storage: Any # This should be overwritten by the importing script
-storage: dict[str, Any] # This should be overwritten by the importing script
+save_storage: Callable # This should be overwritten by the importing script
+storage: Storage # This should be overwritten by the importing script
 
-VocalChannel = discord.VoiceChannel|discord.StageChannel
-auto_delete_talks: dict[VocalChannel, int] = {}
-user_talks: dict[int, VocalChannel] = {}
+GuildChannel = discord.VoiceChannel|discord.StageChannel|discord.ForumChannel|discord.TextChannel|discord.CategoryChannel
+
+auto_delete_talks: dict[GuildChannel, int] = {}
+user_talks: dict[int, GuildChannel] = {}
 talk_roles: dict[int, discord.Role] = {}
 boolTexts = {False: "No", True: "Yes"}
 
@@ -66,7 +68,7 @@ class talkSettings:
         else:
             self.load_default()
     
-    def load_data(self, storage: dict[str, Any]):
+    def load_data(self, storage: TalkDict):
         self.soundboard = storage["soundboard"]
         self.name = storage["name"]
         self.banlist = storage["banlist"]
@@ -81,7 +83,7 @@ class talkSettings:
     async def apply(self, interaction: discord.Interaction):
         self.save()
         talk = user_talks.get(self.user)
-        if talk:
+        if talk and not isinstance(talk, discord.CategoryChannel):
             for member in talk.members:
                 if (member.id in self.banlist) ^ self.banlist_is_whitelist:
                     if member.id != self.user:
@@ -142,21 +144,44 @@ class talkSettings:
             category = guild.categories[category_names.index("User Talks")]
         else:
             category = await guild.create_category("User Talks")
-        role = await guild.create_role(name=f"talk_{self.user}")
-        talk = await guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
-        await self.add_users_to_role(interaction, role)
+        roleCreated: bool = False
+        role = None
+        if not storage["talks"].get(str(self.user)):
+            self.save()
+        roleId = storage["talks"][str(self.user)].get("current_role_id", None)
+        if roleId:
+            role = guild.get_role(roleId)
+        if not role:
+            role = await guild.create_role(name=f"talk_{self.user}")
+            roleCreated = True
+        talkId = storage["talks"][str(self.user)].get("current_id", None)
+        if talkId and not roleCreated:
+            talk = guild.get_channel(talkId) or await guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
+        else:
+            talk = await guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
+        if roleCreated:
+            await self.add_users_to_role(interaction, role)
+        storage["talks"][str(self.user)]["current_id"] = talk.id
+        storage["talks"][str(self.user)]["current_role_id"] = role.id
+        save_storage()
         return talk, role
     
     def message(self) -> str:
         return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}\n{'-# Warning: there are unsaved changes' if self.unsaved else ''}"    
 
     def save(self):
+        talk = storage["talks"].get(str(self.user), None)
         storage["talks"][str(self.user)] = {
             "soundboard": self.soundboard,
             "name": self.name, 
             "banlist": self.banlist,
-            "banlist_is_whitelist": self.banlist_is_whitelist
+            "banlist_is_whitelist": self.banlist_is_whitelist,
+            "current_id": None,
+            "current_role_id": None
             }
+        if talk:
+            storage["talks"][str(self.user)]["current_id"] = talk.get("current_id", None)
+            storage["talks"][str(self.user)]["current_role_id"] = talk.get("current_role_id", None)
         save_storage()
 
 class toggleButton(discord.ui.Button):
@@ -221,14 +246,18 @@ class talkCommand(discord.app_commands.Group):
         settings = talkSettings(interaction.user.id)
         await interaction.response.defer(ephemeral=True)
         talk, role = await settings.create_talk(interaction)
+        if isinstance(talk, discord.CategoryChannel):
+            raise ValueError
         user_talks[interaction.user.id] = talk
         talk_roles[interaction.user.id] = role
         await interaction.followup.send(content=f":white_check_mark: Created {talk.mention}!", ephemeral=True)
         await asyncio.sleep(180)
         if len(talk.members) == 0:
             await talk.delete()
-            await role.delete()
             user_talks.pop(interaction.user.id)
+            talk_roles.pop(interaction.user.id)
+            storage["talks"][str(interaction.user.id)]["current_id"] = None
+            save_storage()
         else:
             auto_delete_talks[talk] = interaction.user.id
     
@@ -308,6 +337,40 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         return
     talk_id = auto_delete_talks.pop(before.channel)
     user_talks.pop(talk_id)
-    role = talk_roles.pop(talk_id)
+    talk_roles.pop(talk_id)
     await before.channel.delete()
-    await role.delete()
+    storage["talks"][str(talk_id)]["current_id"] = None
+    save_storage()
+
+async def finish_init():
+    for strid, talk in storage["talks"].items():
+        intid = int(strid)
+        channelId = talk.get("current_id", None)
+        roleId = talk.get("current_role_id", None)
+        if not channelId:
+            continue
+        if not roleId:
+            continue
+        channel = bot.get_channel(channelId)
+        if not channel:
+            storage["talks"][strid]["current_id"] = None
+            continue
+        if isinstance(channel, (discord.abc.PrivateChannel, discord.Thread)):
+            continue
+        role = channel.guild.get_role(roleId)
+        if not role:
+            storage["talks"][strid]["current_id"] = None
+            storage["talks"][strid]["current_role_id"] = None
+            await channel.delete(reason="Associated role missing")
+            continue
+        if isinstance(channel, discord.CategoryChannel):
+            continue
+        if len(channel.members) == 0:
+            storage["talks"][strid]["current_id"] = None
+            await channel.delete()
+            continue
+        user_talks[intid] = channel
+        talk_roles[intid] = role
+        auto_delete_talks[channel] = intid
+    save_storage()
+        
