@@ -7,6 +7,7 @@ Its a bit of a mess but it works
 - run following command to install packages: `python3 -m pip install discord.py "discord[voice]" regex`
 - go to the [discord developer portal](https://discord.com/developers/applications), create or select a bot and copy your bot token
 - create a file named `bot_token.hidden.txt` and put the token in there
+- create `config.json` from `confic_template.jsonc`, make sure to remove the comments
 
 ## How to run
 - cd to this folder and run `python3 bot.py`

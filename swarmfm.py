@@ -47,11 +47,15 @@ class swarmfmCommand(discord.app_commands.Group):
         if not interaction.guild:
             await interaction.response.send_message("Something went wrong.", ephemeral=True)
             return
-        if interaction.guild.voice_client:
-            await interaction.guild.voice_client.disconnect(force=False)
-            await interaction.response.send_message("Disconnected.", ephemeral=True)
-        else:
+        if not interaction.guild.voice_client:
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
+            return
+        if isinstance(interaction.user, discord.Member) and interaction.user.voice and interaction.guild.voice_client.channel == interaction.user.voice.channel:
+            await interaction.response.send_message(":x: We are not in the same VC!", ephemeral=True)
+            return
+        await interaction.guild.voice_client.disconnect(force=False)
+        await interaction.response.send_message("Disconnected.", ephemeral=True)
+            
 
     @discord.app_commands.command(name="reload", description="Reload the Stream")
     @discord.app_commands.describe(url="The URL of the stream")
@@ -92,13 +96,15 @@ class swarmfmCommand(discord.app_commands.Group):
 
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     # Conditions
-    if not (before.channel and not after.channel): # User leaves a talk
+    if before.channel == after.channel: # User leaves a talk
         return
     if not bot:
         return
     if not bot.user:
         return
     if member.id == bot.user.id: # User is not the bot
+        return
+    if not before.channel:
         return
     if not before.channel.guild.voice_client: # Bot is in a talk
         return

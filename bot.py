@@ -4,6 +4,8 @@ import json
 import sys
 import logging
 import os
+import datetime
+import gzip
 from typing import Any
 
 import uno
@@ -59,13 +61,21 @@ if os.path.exists("storage_copy.json") and not os.path.exists("storage.json"):
 defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}}
 try:
     with open("storage.json", "r") as f:
-        storage: types.Storage = insertToTypedDict(json.load(f), defaultStorage)
-except:
+        contents = f.read()
+        try:
+            if not os.path.exists("backups"):
+                os.mkdir("backups")
+            with gzip.open(f"backups/{datetime.datetime.now().strftime("%Y_%m_%d__%H%M%S.json.gz")}", "wb") as backupf:
+                backupf.write(contents.encode("utf-8"))
+        except Exception as e:
+            logging.error(f"Failed to create backup: {e}")
+        storage: types.Storage = insertToTypedDict(json.loads(contents), defaultStorage)
+except FileNotFoundError:
     storage = defaultStorage
+except json.JSONDecodeError:
+    logging.fatal("storage could not be read")
+    quit()
 save_storage()
-
-with open("version.txt", "r") as f:
-    VERSION = f.read()
 
 
 class OwnerCommand(discord.app_commands.Group):
@@ -122,10 +132,6 @@ async def logs(interaction: discord.Interaction):
     with open("bot.log", "rb") as f:
         await interaction.response.send_message("Here you go!", file=discord.File(f, "bot.log"), view=view)
 
-@discord.app_commands.command(name="version", description="Get the current version number")
-async def version(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Running Version {VERSION}", ephemeral=True)
-
 @bot.event
 async def on_ready():
     global myServer
@@ -141,7 +147,6 @@ async def on_ready():
 
         # General Commands
         bot.tree.add_command(logs)
-        bot.tree.add_command(version)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(swarmfm.swarmfmCommand())
@@ -158,6 +163,8 @@ async def on_ready():
             await bot.tree.sync(guild=myServer)
         else:
             logging.warning(f"Server {config['dedicatedServer']} Not Found")
+        
+        await talk.finish_init()
 
         bot.loop.create_task(wordle.close_idle_games())
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")
@@ -218,7 +225,7 @@ talk.storage = storage
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
     token = f.read()
-if (not "--autostarted" in sys.argv) or config["disabled"]:
+if (not "--autostarted" in sys.argv) or (not config["disabled"]):
     bot.run(token, log_handler=None)
 logging.info("Exiting.")
 if len(wordle.ongoing):
