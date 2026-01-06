@@ -7,6 +7,7 @@ class Config(TypedDict):
     pointBringingVcs: Optional[list[int]]
     altRole: Optional[int]
     afkChannel: Optional[int]
+    disabled: Optional[bool]
 
 class ShopItemDict(TypedDict):
     title: str
