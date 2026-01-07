@@ -65,7 +65,7 @@ try:
         try:
             if not os.path.exists("backups"):
                 os.mkdir("backups")
-            with gzip.open(f"backups/{datetime.datetime.now().strftime("%Y_%m_%d__%H%M%S.json.gz")}", "wb") as backupf:
+            with gzip.open(f"backups/{datetime.datetime.now().strftime('%Y_%m_%d__%H%M%S.json.gz')}", "wb") as backupf:
                 backupf.write(contents.encode("utf-8"))
         except Exception as e:
             logging.error(f"Failed to create backup: {e}")

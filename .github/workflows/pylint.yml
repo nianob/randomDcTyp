@@ -21,4 +21,4 @@ jobs:
         pip install discord
     - name: Analysing the code with pylint
       run: |
-        pylint --fail-under=0 $(git ls-files '*.py')
+        pylint --disable=all --enable=E $(git ls-files '*.py')
