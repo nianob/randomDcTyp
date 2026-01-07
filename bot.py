@@ -13,6 +13,7 @@ import wordle
 import vc
 import swarmfm
 import talk
+import config_edit
 import customtypes as types
 
 
@@ -45,6 +46,10 @@ def insertToTypedDict(dictionary: dict[str, Any], defaults: types.AnyDict) -> ty
         else:
             outDict[key] = value
     return outDict
+
+if "--write-pid" in sys.argv:
+    with open("bot.pid", "w") as f:
+        f.write(str(os.getpid()))
 
 if not os.path.exists("config.json") and os.path.exists("config_template.jsonc"):
     raise FileNotFoundError("Please create config.json from config_template.jsonc before launching this bot.")
@@ -147,6 +152,7 @@ async def on_ready():
 
         # General Commands
         bot.tree.add_command(logs)
+        bot.tree.add_command(config_edit.edit_config)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(swarmfm.swarmfmCommand())
@@ -221,6 +227,7 @@ swarmfm.bot = bot
 talk.bot = bot
 talk.save_storage = save_storage
 talk.storage = storage
+config_edit.config = config
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
