@@ -21,4 +21,4 @@ jobs:
         pip install discord.py "discord[voice]" regex
     - name: Analysing the code with pylint
       run: |
-        pylint --disable=all --enable=E $(git ls-files '*.py')
+        pyright
