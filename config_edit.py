@@ -44,9 +44,14 @@ class OptionButton(discord.ui.Button):
         @text_input("Set number", "number", default=str(self.config.get(self.optionName, "")))
         async def int_input(interaction: discord.Interaction, reply: str):
             nonlocal self, isOptional
-            if reply.isnumeric() or (regex.match("^(?:none|null)$", reply, regex.IGNORECASE) and isOptional):
+            if reply.isnumeric():
                 await interaction.response.defer()
                 self.config[self.optionName] = int(reply)
+                await refreshMessage(self.orig_interaction, self.config)
+                return
+            elif regex.match("^(?:none|null)$", reply, regex.IGNORECASE) and isOptional:
+                await interaction.response.defer()
+                self.config[self.optionName] = None
                 await refreshMessage(self.orig_interaction, self.config)
                 return
             await interaction.response.send_message(f"`{reply}` is not a number!", ephemeral=True)
