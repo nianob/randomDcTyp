@@ -140,11 +140,32 @@ class talkSettings:
             talk = await guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
         if roleCreated:
             await self.add_users_to_role(interaction, role)
+        else:
+            await self.ensure_correct_users(interaction, role)
         storage["talks"][str(self.user)]["current_id"] = talk.id
         storage["talks"][str(self.user)]["current_role_id"] = role.id
         save_storage()
         return talk, role
     
+    async def ensure_correct_users(self, interaction: discord.Interaction, role: discord.Role):
+        async def add_role(uid):
+            member = await get_member(interaction, uid)
+            if member:
+                await member.add_roles(role)
+        async def remove_role(uid):
+            member = await get_member(interaction, uid)
+            if member:
+                await member.remove_roles(role)
+
+        target = set(self.banlist)
+        current = set(map(lambda x: x.id, role.members))
+        add = target-current
+        remove = current-target
+        tasks = []
+        tasks.extend(add_role(user_id) for user_id in add)
+        tasks.extend(remove_role(user_id) for user_id in remove)
+        await asyncio.gather(*tasks)
+
     def message(self) -> str:
         return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}\n{'-# Warning: there are unsaved changes' if self.unsaved else ''}"    
 
