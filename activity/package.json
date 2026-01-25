@@ -1,0 +1,21 @@
+{
+  "author": "nianob",
+  "name": "activity",
+  "version": "1.0.0",
+  "description": "A discord activity for the randomDcTyp bot",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "dependencies": {
+    "connect-sqlite3": "^0.9.16",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "node-fetch": "^3.3.2",
+    "sqlite3": "^5.1.7"
+  },
+  "type": "module"
+}

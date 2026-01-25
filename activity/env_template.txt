@@ -1,0 +1,7 @@
+CLIENT_ID=
+CLIENT_SECRET=
+OAUTH2_LINK=
+SESSION_SECRET=
+
+// You get all values except SESSION_SECRET from the discord developer portal
+// SESSION_SECRET is just a large random string (best practice: do `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` and use it's output)

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h1 id="title">Logging in...</h1>
+    <button id="retryBtn" onclick="window.location.href=`/`" hidden>Retry</button>
+    <script>
+        const returnedState = new URLSearchParams(window.location.search).get("state");
+        const expectedState = sessionStorage.getItem("oauth_state");
+
+        if (!returnedState || !expectedState || returnedState !== expectedState) {
+            document.getElementById("title").innerText = "Error: Invalid Session";
+            document.getElementById("retryBtn").hidden=false;
+        } else {
+            sessionStorage.removeItem("oauth_state");
+
+            const code = new URLSearchParams(window.location.search).get("code");
+            fetch("/api/auth", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    window.location.href = "/"
+                } else {
+                    document.getElementById("title").innerText = "Error logging in";
+                    document.getElementById("retryBtn").hidden=false;
+                    return;
+                }
+            })
+        }
+    </script>
+</body>
+</html>

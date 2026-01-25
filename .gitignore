@@ -23,11 +23,19 @@ Thumbs.db
 # logs
 *.log
 
+# node modules, canbe reinstalled with pnm install
+node_modules
+
+# tls certificates
+*.pem
+
 # Storage files
 crash.json
 storage.json
 config.json
 bot_token.hidden.txt
+*.sqlite
+*.sqlite-*
 
 # Backups
 backups/
