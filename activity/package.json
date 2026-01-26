@@ -5,11 +5,15 @@
   "description": "A discord activity for the randomDcTyp bot",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "concurrently \"vite\" \"nodemon server.js\"",
+    "build": "npx vite build"
   },
   "keywords": [],
   "license": "ISC",
+  "type": "module",
   "dependencies": {
+    "@discord/embedded-app-sdk": "^2.4.0",
     "connect-sqlite3": "^0.9.16",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
@@ -17,5 +21,9 @@
     "node-fetch": "^3.3.2",
     "sqlite3": "^5.1.7"
   },
-  "type": "module"
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.11",
+    "vite": "^7.3.1"
+  }
 }

@@ -9,6 +9,30 @@ import dotenv from "dotenv";
 import qs from "querystring";
 
 
+async function refresh_token(req) {
+    const body = qs.stringify({
+        client_id: process.env.CLIENT_ID,
+        client_secret: process.env.CLIENT_SECRET,
+        grant_type: "refresh_token",
+        refresh_token: req.session.discord.refresh_token
+    });
+
+    const dres = await fetch("https://discord.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body
+    });
+
+    const data = await dres.json();
+
+    req.session.discord = {
+        access_token: data.access_token,
+        token_type: data.token_type,
+        refresh_token: data.refresh_token ?? req.session.discord.refresh_token,
+        expires_at: Date.now() + data.expires_in * 1000
+    };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -17,20 +41,20 @@ const app = express();
 
 const SQLiteStore = SQLiteStoreFactory(session);
 app.use(session({
-  store: new SQLiteStore({
-    db: "sessions.sqlite",
-    dir: "./data",
-    ttl: 60 * 60 * 24 * 30
-}),
+    store: new SQLiteStore({
+        db: "sessions.sqlite",
+        dir: "./data",
+        ttl: 60 * 60 * 24 * 30
+    }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    httpOnly: true,
-    secure: true,       // REQUIRED for Discord Activities
-    sameSite: "none",   // REQUIRED inside Discord iframe
-    maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
-  }
+      httpOnly: true,
+      secure: true,       // REQUIRED for Discord Activities
+      sameSite: "none",   // REQUIRED inside Discord iframe
+      maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+    }
 }));
 
 app.use(express.json());
@@ -49,7 +73,8 @@ app.use("/", express.static(path.join(__dirname, "public")));
 // ---- API ----
 app.get("/api/config", (req, res) => {
     res.json({
-        oauth: process.env.OAUTH2_LINK
+        oauth: process.env.OAUTH2_LINK,
+        bot_id: process.env.CLIENT_ID
     })
 });
 
@@ -63,7 +88,7 @@ app.post("/api/auth", async (req, res) => {
         client_secret: process.env.CLIENT_SECRET,
         grant_type: "authorization_code",
         code,
-        redirect_uri: "https://localhost:3000/OAuth2.html"
+        redirect_uri: "https://localhost:3030/OAuth2.html" // This must match the url of the server or discord will return invalid redirect uri; Automate changing this at some point
     })
 
     try {
@@ -99,27 +124,7 @@ app.get("/api/me", async (req, res) => {
     }
     if (Date.now() > req.session.discord.expires_at - 60 * 1000) { // Access token invalid (60 second safety margin)
         try {
-            const body = qs.stringify({
-                client_id: process.env.CLIENT_ID,
-                client_secret: process.env.CLIENT_SECRET,
-                grant_type: "refresh_token",
-                refresh_token: req.session.discord.refresh_token
-            });
-
-            const dres = await fetch("https://discord.com/api/oauth2/token", {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body
-            });
-
-            const data = await dres.json();
-
-            req.session.discord = {
-                access_token: data.access_token,
-                token_type: data.token_type,
-                refresh_token: data.refresh_token ?? req.session.discord.refresh_token,
-                expires_at: Date.now() + data.expires_in * 1000
-            };
+            await refresh_token(req);
         } catch {
             return res.json({ logged_in: false })
         }
@@ -132,11 +137,25 @@ app.get("/api/me", async (req, res) => {
             }
         })
 
-        const user = await userRes.json();
+        let user = await userRes.json();
+
+        if (!user.id) { // assume 401 unauthorized
+            try {
+                await refresh_token(req);
+            } catch {
+                return res.json({ logged_in: false })
+            }
+            const userRes = await fetch("https://discord.com/api/users/@me", {
+                headers: {
+                    Authorization: `${req.session.discord.token_type} ${req.session.discord.access_token}`
+                }
+            })
+            user = await userRes.json();
+        }
 
         return res.json({
             logged_in: true,
-            ok: true,
+            ok: !!user.id,
             user: {
                 id: user.id,
                 username: user.username,
