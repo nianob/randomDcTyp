@@ -11,6 +11,52 @@ function getDiscordAvatarURL(user) {
     return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${format}?size=${size}`;
 }
 
+class Block {
+    constructor(x, y, z, blockId) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.imageCrop = {
+            x: 64*Math.floor((blockId-1)/8),
+            y: 64*((blockId-1)%8),
+            w: 64,
+            h: 64
+        };
+        this.positioning = {
+            x: {
+                x: 35,
+                y: -10
+            },
+            y: {
+                x: -13,
+                y: -33
+            },
+            z: {
+                x: 3,
+                y: -23
+            }
+        };
+    }
+
+    position() {
+        return {
+            x:  this.x*this.positioning.x.x +
+                this.y*this.positioning.y.x +
+                this.z*this.positioning.z.x,
+            y:  this.x*this.positioning.x.y +
+                this.y*this.positioning.y.y +
+                this.z*this.positioning.z.y
+        }
+    }
+
+    draw(ctx) {
+        const positioned = this.position()
+        ctx.drawImage(
+            tileMap, this.imageCrop.x, this.imageCrop.y, this.imageCrop.w, this.imageCrop.h,
+            positioned.x, positioned.y, this.imageCrop.w, this.imageCrop.h
+        )
+    }
+}
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -36,6 +82,12 @@ playerGif.onload = () => { player.playerGif = playerGif; };
 fetch("assets/player.json")
     .then(data => data.json())
     .then(data => {player.playerGifInfo = data;});
+let tileMapLoaded = false
+const tileMap = new Image();
+tileMap.src = "assets/tiles.png";
+tileMap.onload = () => { tileMapLoaded = true; };
+const entityMap = new Image();
+entityMap.src = "assets/entities.png";
 
 const keys = {};
 
@@ -107,6 +159,17 @@ function gameLoop(timestamp) {
 
     player.x += player.dx * dTime
     player.y += player.dy * dTime
+
+    let block1 = new Block(0, -1, 0, 1)
+    let block2 = new Block(1, -1, 0, 1)
+    let block3 = new Block(0, -2, 0, 1)
+    let block4 = new Block(1, -2, 0, 1)
+
+    // Draw tiles
+    block2.draw(ctx);
+    block1.draw(ctx);
+    block4.draw(ctx);
+    block3.draw(ctx);
 
     // Draw player
     if (player.sprite) {
