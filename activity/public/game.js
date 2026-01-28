@@ -24,13 +24,18 @@ resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 
 const camera = { x: 0, y: 0 };
-const player = { x: 100, y: 100, dx: 0, dy: 0, speed: 200, sprite: null };
+const player = { x: 100, y: 100, dx: 0, dy: 0, speed: 200, sprite: null, playerGif: null, playerGifInfo: null, animationTimer: 0 };
 
 // Load sprite
 const playerImg = new Image();
 playerImg.src = getDiscordAvatarURL(user);
 playerImg.onload = () => { player.sprite = playerImg; };
-
+const playerGif = new Image();
+playerGif.src = "assets/player.png";
+playerGif.onload = () => { player.playerGif = playerGif; };
+fetch("assets/player.json")
+    .then(data => data.json())
+    .then(data => {player.playerGifInfo = data;});
 
 const keys = {};
 
@@ -105,8 +110,27 @@ function gameLoop(timestamp) {
 
     // Draw player
     if (player.sprite) {
-        drawRoundAvatar(ctx, player.sprite, player.x, player.y, 64)
+        drawRoundAvatar(ctx, player.sprite, player.x+18, player.y+18, 64)
     }
+    if (player.playerGif && player.playerGifInfo) {
+        if (player.dx !== 0 || player.dy !== 0) {
+            player.animationTimer += dTime * 1000;
+        }
+        const frame = Math.floor((player.animationTimer / player.playerGifInfo.frametime) % player.playerGifInfo.frames )
+        ctx.drawImage(
+            player.playerGif,
+            0,
+            player.playerGifInfo.height * frame,
+            player.playerGifInfo.width,
+            player.playerGifInfo.height,
+            player.x,
+            player.y,
+            player.playerGifInfo.width,
+            player.playerGifInfo.height
+        )
+    }
+    ctx.font = "20px Arial";
+    ctx.fillText(user.username, player.x+50-(ctx.measureText(user.username).width/2), player.y);
 
     requestAnimationFrame(gameLoop);
 }
