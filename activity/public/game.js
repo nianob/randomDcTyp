@@ -11,29 +11,106 @@ function getDiscordAvatarURL(user) {
     return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${format}?size=${size}`;
 }
 
+class World {
+    constructor() {
+        this.chunks = [];
+        this.tiles = new Map();
+        this.tileOrder = [];
+
+        this.animate = this.animate.bind(this); // Bug fix, because `this` is not bound if not used
+    }
+
+    animate() {
+        for (const key of this.tileOrder) {
+            this.tiles.get(key).draw();
+        }
+        requestAnimationFrame(this.animate);
+    }
+}
+
+class Chunk {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.blocks = [];
+    }
+
+    async load() {
+        const res = await fetch(`chunks/${this.x}_${this.y}.json`);
+        const data = await res.json();
+
+        const layerSize = 8;
+        let z = 0;
+
+        for (const layer of data.layers) {
+            for (let y = 0; y < layer.length; y++) {
+                const line = layer[y];
+                for (let x = 0; x < line.length; x++) {
+                    const block = line[x];
+                    this.blocks.push(new Block(
+                        layerSize * this.x + x,
+                        layerSize * this.y + y,
+                        z,
+                        block
+                    ));
+                }
+            }
+            z++;
+        }
+    }
+
+    addTiles(tiles, tileOrder) {
+        this.blocks.forEach(block => {
+            tiles.set(block.key, block)
+            let lo = 0, hi = tileOrder.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (tileOrder[mid] < block.key) lo = mid+1;
+                else hi = mid;
+            }
+            tileOrder.splice(lo, 0, block.key);
+        });
+    }
+
+    removeTiles(tiles, tileOrder) {
+        this.blocks.forEach(block => {
+            tiles.delete(block.key);
+            let lo = 0, hi = tileOrder.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (tileOrder[mid] < block.key) lo = mid + 1;
+                else hi = mid;
+            };
+            tileOrder.splice(lo, 1);
+        });
+    }
+
+}
+
 class Block {
     constructor(x, y, z, blockId) {
         this.x = x;
         this.y = y;
         this.z = z;
+        this.key = 9_999_999_999 - this.x - this.y*100_000 + this.z*10_000_000_000;
         this.imageCrop = {
-            x: 64*Math.floor((blockId-1)/8),
-            y: 64*((blockId-1)%8),
+            x: 64*((blockId-1)%8),
+            y: 64*Math.floor((blockId-1)/8),
             w: 64,
             h: 64
         };
         this.positioning = {
             x: {
                 x: 35,
-                y: -10
+                y: -9
             },
             y: {
-                x: -13,
+                x: -12,
                 y: -33
             },
             z: {
-                x: 3,
-                y: -23
+                x: 2,
+                y: -22
             }
         };
     }
@@ -49,12 +126,12 @@ class Block {
         }
     }
 
-    draw(ctx) {
-        const positioned = this.position()
+    draw() {
+        const positioned = this.position();
         ctx.drawImage(
             tileMap, this.imageCrop.x, this.imageCrop.y, this.imageCrop.w, this.imageCrop.h,
             positioned.x, positioned.y, this.imageCrop.w, this.imageCrop.h
-        )
+        );
     }
 }
 
@@ -161,15 +238,15 @@ function gameLoop(timestamp) {
     player.y += player.dy * dTime
 
     let block1 = new Block(0, -1, 0, 1)
-    let block2 = new Block(1, -1, 0, 1)
     let block3 = new Block(0, -2, 0, 1)
     let block4 = new Block(1, -2, 0, 1)
+    let block5 = new Block(1, -1, 1, 1)
 
     // Draw tiles
-    block2.draw(ctx);
     block1.draw(ctx);
     block4.draw(ctx);
     block3.draw(ctx);
+    block5.draw(ctx);
 
     // Draw player
     if (player.sprite) {
@@ -197,5 +274,14 @@ function gameLoop(timestamp) {
 
     requestAnimationFrame(gameLoop);
 }
+const world = new World()
+const chunk1 = new Chunk(0, -2)
+const chunk2 = new Chunk(1, -2)
+chunk1.load().then(() => {
+    chunk1.addTiles(world.tiles, world.tileOrder);
+})
+chunk2.load().then(() => {
+    chunk2.addTiles(world.tiles, world.tileOrder);
+})
 
-requestAnimationFrame(gameLoop);
+requestAnimationFrame(world.animate);

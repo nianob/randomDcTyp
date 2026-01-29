@@ -7,7 +7,7 @@ async function init() {
   const res = await fetch("/api/config");
   const data = await res.json();
   if (isDiscordActivity()) {
-    if (!user_state.logged_in) {
+    if (!(user_state.logged_in && user_state.ok)) {
       const sdk = await import("@discord/embedded-app-sdk");
       DiscordSDK = sdk.DiscordSDK;
       discordSdk = new DiscordSDK(data.bot_id);
