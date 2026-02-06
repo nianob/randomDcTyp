@@ -4,6 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   root: "public",
+  appType: "mpa",
   server: {
     port: 3030,
     https: {
