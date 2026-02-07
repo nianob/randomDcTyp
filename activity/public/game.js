@@ -1,3 +1,5 @@
+console.profile();
+
 function getDiscordAvatarURL(user) {
     const format = user.avatar.startsWith("a_") ? "gif" : "png"; // animated or static
     const size = 32; // you can use 32, 64, 128, 256, 512, 1024, 2048
@@ -26,22 +28,36 @@ class World {
     constructor(id) {
         this.id = id;
         this.draw = this.draw.bind(this); // Bug fix, because `this` is not bound if used in requestAnimationFrame
-        this.visible = {sizes: {minX: 0, maxX: -1, minY: 0, maxY: -1}, values: new Map(), order: []}
+        this.visible = {sizes: {minX: 0, maxX: -1, minY: 0, maxY: -1}, values: new Map(), order: []};
+        this.time = 0;
     }
 
-    draw() {
+    draw(timestamp) {
+        const dt = this.time-timestamp;
+        this.time = timestamp;
+        
+        requestAnimationFrame(this.draw);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (keys["w"] || keys["arrowup"]) camera.y+=10;
         if (keys["s"] || keys["arrowdown"]) camera.y-=10;
         if (keys["a"] || keys["arrowleft"]) camera.x-=10;
         if (keys["d"] || keys["arrowright"]) camera.x+=10;
-
+        
         this.clipChunks()
-        for (const chunkId of this.visible.order) {
+        for (let i=0; i<this.visible.order.length; i++) {
+            const chunkId = this.visible.order[i];
             const chunk = this.visible.values.get(chunkId)
-            if (chunk.visible) chunk.draw();
+            if (chunk.visible) chunk.draw()
+            else if (chunk.unload !== -1 && this.time > chunk.unload) {
+                console.log(`Unloading Chunk at ${chunk.x} ${chunk.y}`);
+                this.visible.values.delete(chunkId);
+                this.visible.order.splice(i, 1);
+                i--;
+                if (this.visible.order.includes(chunkId)) {
+                    console.warn("DUPLICATE CHUNK KEY DETECTED:", chunkId);
+                }
+            }
         }
-        requestAnimationFrame(this.draw);
     }
 
     clipChunks() {
@@ -61,7 +77,7 @@ class World {
                 let chunk = this.visible.values.get(keyGen(x, y));
                 if (chunk === undefined) {
                     chunk = new Chunk(x, y, this.id);
-                    chunk.load();
+                    chunk.load(this.visible);
                     this.visible.values.set(keyGen(x, y), chunk);
                 }
                 chunk.startDisplay(this.visible);
@@ -74,10 +90,10 @@ class World {
                 let chunk = this.visible.values.get(keyGen(x, y));
                 if (chunk === undefined) {
                     chunk = new Chunk(x, y, this.id);
-                    chunk.load();
+                    chunk.load(this.visible);
                     this.visible.values.set(keyGen(x, y), chunk);
                 }
-                chunk.startDisplay(this.visible);
+                chunk.startDisplay();
             }
             this.visible.sizes.maxX++;
         }
@@ -87,10 +103,10 @@ class World {
                 let chunk = this.visible.values.get(keyGen(x, y));
                 if (chunk === undefined) {
                     chunk = new Chunk(x, y, this.id);
-                    chunk.load();
+                    chunk.load(this.visible);
                     this.visible.values.set(keyGen(x, y), chunk);
                 }
-                chunk.startDisplay(this.visible);
+                chunk.startDisplay();
             }
             this.visible.sizes.minY--;
         }
@@ -100,10 +116,10 @@ class World {
                 let chunk = this.visible.values.get(keyGen(x, y));
                 if (chunk === undefined) {
                     chunk = new Chunk(x, y, this.id);
-                    chunk.load();
+                    chunk.load(this.visible);
                     this.visible.values.set(keyGen(x, y), chunk);
                 }
-                chunk.startDisplay(this.visible);
+                chunk.startDisplay();
             }
             this.visible.sizes.maxY++;
         }
@@ -111,7 +127,7 @@ class World {
         for (let x=this.visible.sizes.minX; minX>this.visible.sizes.minX; x++) {
             for (let y=this.visible.sizes.minY; y <= this.visible.sizes.maxY; y++) {
                 let chunk = this.visible.values.get(keyGen(x, y));
-                if (chunk !== undefined) chunk.stopDisplay(this.visible);
+                if (chunk !== undefined) chunk.stopDisplay(this.time);
             }
             this.visible.sizes.minX++;
         }
@@ -119,7 +135,7 @@ class World {
         for (let x=this.visible.sizes.maxX; maxX<this.visible.sizes.maxX; x--) {
             for (let y=this.visible.sizes.minY; y <= this.visible.sizes.maxY; y++) {
                 let chunk = this.visible.values.get(keyGen(x, y));
-                if (chunk !== undefined) chunk.stopDisplay(this.visible);
+                if (chunk !== undefined) chunk.stopDisplay(this.time);
             }
             this.visible.sizes.maxX--;
         }
@@ -127,7 +143,7 @@ class World {
         for (let y=this.visible.sizes.minY; minY>this.visible.sizes.minY; y++) {
             for (let x=this.visible.sizes.minX; x <= this.visible.sizes.maxX; x++) {
                 let chunk = this.visible.values.get(keyGen(x, y));
-                if (chunk !== undefined) chunk.stopDisplay(this.visible);
+                if (chunk !== undefined) chunk.stopDisplay(this.time);
             }
             this.visible.sizes.minY++;
         }
@@ -135,7 +151,7 @@ class World {
         for (let y=this.visible.sizes.maxY; maxY<this.visible.sizes.maxY; y--) {
             for (let x=this.visible.sizes.minX; x <= this.visible.sizes.maxX; x++) {
                 let chunk = this.visible.values.get(keyGen(x, y));
-                if (chunk !== undefined) chunk.stopDisplay(this.visible);
+                if (chunk !== undefined) chunk.stopDisplay(this.time);
             }
             this.visible.sizes.maxY--;
         }
@@ -155,11 +171,22 @@ class Chunk {
         this.image = new Image();
         this.imageloaded = false;
         this.blocksChanged = false;
+        this.unload = -1;
     }
 
-    async load() {
+    async load(visibleInfo) {
         console.log(`Loading Chunk at ${this.x} ${this.y}`)
         const res = await fetch(`chunks/${this.world}/${this.x}_${this.y}.json`);
+
+        visibleInfo.values.set(this.key, this);
+            let lo = 0, hi = visibleInfo.order.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (visibleInfo.order[mid] < this.key) lo = mid+1;
+                else hi = mid;
+            }
+        visibleInfo.order.splice(lo, 0, this.key);
+
         if (!res.ok) return;
         const data = await res.json();
 
@@ -212,25 +239,19 @@ class Chunk {
         ctx.drawImage(this.image, pos.x-camera.x-250, pos.y+camera.y+250)
     }
 
-    startDisplay(visibleInfo) {
+    startDisplay() {
         console.log(`Start display chunk ${this.x} ${this.y}`);
         if (this.blocksChanged) {
             this.render();
         }
-        visibleInfo.values.set(this.key, this);
-            let lo = 0, hi = visibleInfo.order.length;
-            while (lo < hi) {
-                const mid = (lo + hi) >> 1;
-                if (visibleInfo.order[mid] < this.key) lo = mid+1;
-                else hi = mid;
-            }
-        visibleInfo.order.splice(lo, 0, this.key);
         this.visible = true;
+        this.unload = -1;
     }
 
-    stopDisplay(visibleInfo) {
+    stopDisplay(timestamp) {
         console.log(`Stop display chunk ${this.x} ${this.y}`);
         this.visible = false;
+        this.unload = timestamp+60_000
     }
 
 }
@@ -256,6 +277,15 @@ class Block {
             tileMap, this.imageCrop.x, this.imageCrop.y, this.imageCrop.w, this.imageCrop.h,
             this.position.x+500, this.position.y+500, this.imageCrop.w, this.imageCrop.h
         );
+    }
+}
+
+class Entity {
+    tileCount = 1;
+    constructor(id, x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
     }
 }
 
