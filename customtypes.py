@@ -28,12 +28,16 @@ class TalkDict(TypedDict):
     current_id: Optional[int]
     current_role_id: Optional[int]
 
+class AutoModDict(TypedDict):
+    rules: list[str]
+
 class Storage(TypedDict):
     hiddenOwners: list[int]
     vc_points: dict[str, int]
     max_vc_points: dict[str, int]
     shops: dict[str, ShopDict]
     talks: dict[str, TalkDict]
+    autoMod: dict[str, AutoModDict]
 
 AnyDict = TypeVar("AnyDict", 
     dict,

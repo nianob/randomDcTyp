@@ -13,6 +13,8 @@ import wordle
 import vc
 import swarmfm
 import talk
+import config_edit
+import automod
 import customtypes as types
 
 
@@ -46,6 +48,10 @@ def insertToTypedDict(dictionary: dict[str, Any], defaults: types.AnyDict) -> ty
             outDict[key] = value
     return outDict
 
+if "--write-pid" in sys.argv:
+    with open("bot.pid", "w") as f:
+        f.write(str(os.getpid()))
+
 if not os.path.exists("config.json") and os.path.exists("config_template.jsonc"):
     raise FileNotFoundError("Please create config.json from config_template.jsonc before launching this bot.")
 with open("config.json", "r") as f:
@@ -58,7 +64,7 @@ if os.path.exists("storage_copy.json") and not os.path.exists("storage.json"):
     logging.warning("sorage.json doesn't exist bur storage_copy does, the bot may have crashed during saving, restoring from storage_copy!")
     os.rename("storage_copy.json", "storage.json")
 
-defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}}
+defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}, "autoMod": {}}
 try:
     with open("storage.json", "r") as f:
         contents = f.read()
@@ -147,10 +153,12 @@ async def on_ready():
 
         # General Commands
         bot.tree.add_command(logs)
+        bot.tree.add_command(config_edit.edit_config)
         bot.tree.add_command(wordle.WordleCommand())
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(swarmfm.swarmfmCommand())
         bot.tree.add_command(talk.talkCommand())
+        bot.tree.add_command(automod.automod)
         await bot.tree.sync()
 
         # Ownn Server Only Commands
@@ -171,10 +179,11 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
+    if message.author == bot.user:
+        return
+    await automod.handleChatMessage(message)
     channel = message.channel.id
     if not channel in wordle.ongoing.keys():
-        return
-    if message.author == bot.user:
         return
     await wordle.ongoing[channel].handleChatMessage(message)
 
@@ -221,6 +230,9 @@ swarmfm.bot = bot
 talk.bot = bot
 talk.save_storage = save_storage
 talk.storage = storage
+config_edit.config = config
+automod.save_storage = save_storage
+automod.storage = storage
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:

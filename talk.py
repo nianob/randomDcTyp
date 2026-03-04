@@ -3,6 +3,7 @@ from discord.ext import commands
 import asyncio
 from typing import Optional, Any, Callable
 from customtypes import Storage, TalkDict
+from utils import text_input
 
 bot: commands.Bot # This should be overwritten by the importing script
 save_storage: Callable # This should be overwritten by the importing script
@@ -31,28 +32,6 @@ def from_value(dictionary: dict, item: Any) -> Any:
         if value == item:
             return key
     raise ValueError(f"Item {item} not found in dictionary values")
-
-def text_input(title: str, label: str, placeholder: str = "", default: str = "", min_length: Optional[int] = None, max_length: Optional[int] = None, style: discord.TextStyle = discord.TextStyle.short):
-    """
-    Example usage:
-    ```
-    @text_input("Example Title", "Example Field")
-    async def response(interaction: discord.Interaction, reply: str):
-        await interaction.response.send_message(f"You wrote `{reply}`")
-    ```
-    """
-    def decorator(func):
-        class Modal(discord.ui.Modal):
-            def __init__(self):
-                super().__init__(title=title, timeout=300)
-                self.input = discord.ui.TextInput(label=label, placeholder=placeholder, default=default, required=bool(min_length), min_length=min_length, max_length=max_length, style=style)
-                self.add_item(self.input)
-        
-            async def on_submit(self, interaction: discord.Interaction):
-                await func(interaction, self.input.value)
-
-        return Modal
-    return decorator
 
 class talkSettings:
     def __init__(self, user: int):
@@ -161,11 +140,32 @@ class talkSettings:
             talk = await guild.create_voice_channel(name=self.name or f"{interaction.user.display_name}s Talk", category=category, overwrites=self.get_overwrites(interaction, role))
         if roleCreated:
             await self.add_users_to_role(interaction, role)
+        else:
+            await self.ensure_correct_users(interaction, role)
         storage["talks"][str(self.user)]["current_id"] = talk.id
         storage["talks"][str(self.user)]["current_role_id"] = role.id
         save_storage()
         return talk, role
     
+    async def ensure_correct_users(self, interaction: discord.Interaction, role: discord.Role):
+        async def add_role(uid):
+            member = await get_member(interaction, uid)
+            if member:
+                await member.add_roles(role)
+        async def remove_role(uid):
+            member = await get_member(interaction, uid)
+            if member:
+                await member.remove_roles(role)
+
+        target = set(self.banlist)
+        current = set(map(lambda x: x.id, role.members))
+        add = target-current
+        remove = current-target
+        tasks = []
+        tasks.extend(add_role(user_id) for user_id in add)
+        tasks.extend(remove_role(user_id) for user_id in remove)
+        await asyncio.gather(*tasks)
+
     def message(self) -> str:
         return f"**Your Talk Settings:**\nSoundboard: {boolTexts[self.soundboard]}\nName: `{self.name or '-'}`\nBanlist Mode: {'Whitelist' if self.banlist_is_whitelist else 'Banlist'}\n{'-# Warning: there are unsaved changes' if self.unsaved else ''}"    
 

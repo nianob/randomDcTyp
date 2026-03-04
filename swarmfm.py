@@ -50,9 +50,6 @@ class swarmfmCommand(discord.app_commands.Group):
         if not interaction.guild.voice_client:
             await interaction.response.send_message(":x: Im not in a VC!", ephemeral=True)
             return
-        if isinstance(interaction.user, discord.Member) and interaction.user.voice and interaction.guild.voice_client.channel == interaction.user.voice.channel:
-            await interaction.response.send_message(":x: We are not in the same VC!", ephemeral=True)
-            return
         await interaction.guild.voice_client.disconnect(force=False)
         await interaction.response.send_message("Disconnected.", ephemeral=True)
             
