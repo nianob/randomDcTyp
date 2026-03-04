@@ -14,6 +14,7 @@ import vc
 import swarmfm
 import talk
 import config_edit
+import automod
 import customtypes as types
 
 
@@ -63,7 +64,7 @@ if os.path.exists("storage_copy.json") and not os.path.exists("storage.json"):
     logging.warning("sorage.json doesn't exist bur storage_copy does, the bot may have crashed during saving, restoring from storage_copy!")
     os.rename("storage_copy.json", "storage.json")
 
-defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}}
+defaultStorage: types.Storage = {"hiddenOwners": [], "vc_points": {}, "max_vc_points": {}, "shops": {}, "talks": {}, "autoMod": {}}
 try:
     with open("storage.json", "r") as f:
         contents = f.read()
@@ -157,6 +158,7 @@ async def on_ready():
         bot.tree.add_command(uno.UnoCommand())
         bot.tree.add_command(swarmfm.swarmfmCommand())
         bot.tree.add_command(talk.talkCommand())
+        bot.tree.add_command(automod.automod)
         await bot.tree.sync()
 
         # Ownn Server Only Commands
@@ -177,10 +179,11 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
+    if message.author == bot.user:
+        return
+    await automod.handleChatMessage(message)
     channel = message.channel.id
     if not channel in wordle.ongoing.keys():
-        return
-    if message.author == bot.user:
         return
     await wordle.ongoing[channel].handleChatMessage(message)
 
@@ -228,6 +231,8 @@ talk.bot = bot
 talk.save_storage = save_storage
 talk.storage = storage
 config_edit.config = config
+automod.save_storage = save_storage
+automod.storage = storage
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:

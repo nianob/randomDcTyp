@@ -40,11 +40,6 @@ def text_input(title: str, label: str, placeholder: str = "", default: str = "",
         return Modal
     return decorator
 
-def disabled(func: Callable) -> Callable[[discord.Interaction], Coroutine[Any, Any, None]]:
-    async def wrapper(interaction: discord.Interaction):
-        await interaction.response.send_message(":warning: This Command is currently disabled, because of some issues", ephemeral=True)
-    return wrapper
-
 def button(label = None, style = discord.ButtonStyle.primary):
     def decorator(func):
         class Button(discord.ui.Button):
@@ -405,7 +400,6 @@ class vcCommand(discord.app_commands.Group):
         super().__init__(name="vc", description="Commands for your VC-Points")
     
     @discord.app_commands.command(name="info", description="Get information about VC-Points")
-    @disabled
     async def info(self, interaction: discord.Interaction):
         if isinstance(interaction.user, discord.User):
             raise ValueError
@@ -418,7 +412,6 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(f"You get VC-Points for being in one of the four gaming talks if you aren't full-muted. You get **1 point a minute**.\nYou currently have **{points} VC-Points**.\n You can buy stuff from other users by doing `/vc shop`.{shop_msg}{alt_acc_msg}", ephemeral=True)
     
     @discord.app_commands.command(name="check", description="Check how many points the user has.")
-    @disabled
     async def check(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         pointlist: dict[str, int] = storage["vc_points"]
         u = user if user else interaction.user
@@ -429,7 +422,6 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(f"{u.mention} currently has **{points} VC-Point{'s' if points != 1 else ''}**.", ephemeral=True)
 
     @discord.app_commands.command(name="points", description="Check how many points the user has.")
-    @disabled
     async def points(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         pointlist: dict[str, int] = storage["vc_points"]
         u = user if user else interaction.user
@@ -440,7 +432,6 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(f"{u.mention} currently has **{points} VC-Point{'s' if points != 1 else ''}**.", ephemeral=True)
     
     @discord.app_commands.command(name="best", description="See the top VC-Point holders")
-    @disabled
     async def best(self, interaction: discord.Interaction):
         msg = getBestListWithContext(interaction, range(10))
         view = discord.ui.View()
@@ -449,7 +440,6 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(f"Top VC-Point holders:\n{msg}", view=view, ephemeral=True)
     
     @discord.app_commands.command(name="shop", description="View a pointshop")
-    @disabled
     async def shop(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         if user == None:
             names = []
@@ -468,7 +458,6 @@ class vcCommand(discord.app_commands.Group):
             await interaction.response.send_message(message, view=view, ephemeral=True)
     
     @discord.app_commands.command(name="myshop", description="Edit your pointshop")
-    @disabled
     async def myshop(self, interaction: discord.Interaction):
         if str(interaction.user.id) in shops.keys():
             shop = shops[str(interaction.user.id)]
@@ -485,7 +474,6 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(message, view=view, ephemeral=True)
     
     @discord.app_commands.command(name="partent", description="Kaufe dir ein Partent")
-    @disabled
     async def partent(self, interaction: discord.Interaction):
         if storage["vc_points"].get(str(interaction.user.id), 0) < 500:
             await interaction.response.send_message("Sorry, but you don't have enough points to do that! You need 500.", ephemeral=True)
@@ -493,7 +481,6 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_modal(partent())
     
     @discord.app_commands.command(name="partents", description="Zeige dir alle Partente an")
-    @disabled
     async def partents(self, interaction: discord.Interaction):
         message = ""
         for partent in storage["partents"]:
@@ -519,7 +506,6 @@ class vcCommand(discord.app_commands.Group):
         await send_challenge(user)
     
     @discord.app_commands.command(name="pay", description="Pay the user the specified amount of VC-Points")
-    @disabled
     async def pay(self, interaction: discord.Interaction, user: discord.Member, points: int):
         myPoints = storage["vc_points"].get(str(interaction.user.id), 0)
         if myPoints < points:
@@ -540,7 +526,6 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_message(f":white_check_mark: You transfered {points} VC-Points to {user.mention}.", ephemeral=True)
 
     @discord.app_commands.command(name="manage", description="Manage VC-Points")
-    @disabled
     async def manage(self, interaction: discord.Interaction, user: discord.Member):
         if interaction.user.id != owner:
             await interaction.response.send_message(":x: Sorry, but you can't do that!", ephemeral=True)
@@ -559,7 +544,6 @@ class vcCommand(discord.app_commands.Group):
         await interaction.response.send_modal(ui())
 
 async def reward(bot: commands.Bot, pointBringingVcs: list[int], server_id: int):
-    return # This function is disabled too
     while True:
         num_intalk = 0
         try:
