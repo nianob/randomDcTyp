@@ -3,11 +3,7 @@ This is the code from the @randomDcTyp#3551 discord bot for the [Good Game Clan]
 Its a bit of a mess but it works
 
 ## How to install:
-- Make sure you are running Python 3.11
-- run following command to install packages: `python3 -m pip install discord.py discord.py[voice] regex`
-- go to the [discord developer portal](https://discord.com/developers/applications), create or select a bot and copy your bot token
-- create a file named `bot_token.hidden.txt` and put the token in there
-- create `config.json` from `confic_template.jsonc`, make sure to remove the comments
+- Run `python3 setup.py` and input all necesary information
   
 > [!important]
 > If you have an older version of `discord.py` make sure to update it, as dicord requires E2EE (DAVE protocol) for voice channels starting at March 2026.
