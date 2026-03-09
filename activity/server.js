@@ -173,8 +173,8 @@ app.get("/api/me", async (req, res) => {
 // ---- Start server ----
 https.createServer(
     {
-        key: fs.readFileSync("localhost-key.pem"), // The server will be http and acessed by Apache in prod
-        cert: fs.readFileSync("localhost.pem"),    // so this will be removed
+        key: fs.readFileSync("localhost.key"), // The server will be http and acessed by Apache in prod
+        cert: fs.readFileSync("localhost.crt"),    // so this will be removed
     },
     app
 ).listen(3000);

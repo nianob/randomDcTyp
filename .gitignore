@@ -28,6 +28,8 @@ node_modules
 
 # tls certificates
 *.pem
+*.crt
+*.key
 
 # Storage files
 crash.json

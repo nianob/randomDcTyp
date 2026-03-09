@@ -235,7 +235,7 @@ class Chunk {
 
     draw() {
         if (this.blocksChanged && this.visible) this.render();
-        const pos = position(this.x*chunkSize, 0, this.y*chunkSize)
+        const pos = position(this.x*chunkSize, this.y*chunkSize, 0)
         ctx.drawImage(this.image, pos.x-camera.x-250, pos.y+camera.y+250)
     }
 
@@ -273,6 +273,7 @@ class Block {
 
     draw() {
         console.log(`drawing block at ${this.x}, ${this.y}, ${this.z}`)
+        tmpCtx.filter = `brightness(${1+this.z*0.05})`;
         tmpCtx.drawImage(
             tileMap, this.imageCrop.x, this.imageCrop.y, this.imageCrop.w, this.imageCrop.h,
             this.position.x+500, this.position.y+500, this.imageCrop.w, this.imageCrop.h
