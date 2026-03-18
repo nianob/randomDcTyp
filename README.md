@@ -4,6 +4,7 @@ Its a bit of a mess but it works
 
 ## How to install:
 - Run `python3 setup.py` and input all necesary information
+- Install Ollama
   
 > [!important]
 > If you have an older version of `discord.py` make sure to update it, as dicord requires E2EE (DAVE protocol) for voice channels starting at March 2026.

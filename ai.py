@@ -1,0 +1,15 @@
+import discord
+import ollama
+from discord.ext import commands
+from typing import Any
+
+bot: commands.Bot # This should be overwritten by the importing script
+logging: Any # This should be set by the importing script
+aiModel: str # This should be set by the importing script
+
+async def on_message(message: discord.Message):
+    if not bot.user in message.mentions:
+        return
+    logging.info("Sending Prompt to Ollama: "+message.content)
+    response = await ollama.AsyncClient().generate(model=aiModel, prompt=message.content)
+    await message.reply(response.response)
