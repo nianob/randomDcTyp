@@ -13,7 +13,6 @@ async def on_message(message: discord.Message):
     logging.info("Sending Prompt to Ollama: "+message.content)
     response = await ollama.AsyncClient().generate(model=aiModel, prompt=message.content)
     text = response.response + "\n"
-    lastMessage = message
     texts: list[str] = []
     while len(text.strip()) > 1:
         first_part = text[:2000]
@@ -21,6 +20,8 @@ async def on_message(message: discord.Message):
         text = text[len(list(smart_split)):]
         texts.append(smart_split)
     texts.append(text)
-    for text in texts:
-        if text.strip():
-            lastMessage = await lastMessage.reply(text)
+    for i, text in enumerate(texts):
+        if i == 0:
+            await message.reply(text)
+        elif text.strip():
+            await message.channel.send(text)
