@@ -69,18 +69,39 @@ class OptionButton(discord.ui.Button):
                     await refreshMessage(self.orig_interaction, self.config)
                     return
                 elif isOptional:
+                    await interaction.response.defer()
                     self.config[self.optionName] = None
                     await refreshMessage(self.orig_interaction, self.config)
                     return
                 raise ValueError
             except ValueError:
                 await interaction.response.send_message(f"`{reply}` is not a valid list!", ephemeral=True)
+        
+        @text_input("Set string", "string", default=str(self.config.get(self.optionName, "")))
+        async def str_input(interaction: discord.Interaction, reply: str):
+            nonlocal self, isOptional
+            try:
+                if reply:
+                    await interaction.response.defer()
+                    self.config[self.optionName] = reply
+                    await refreshMessage(self.orig_interaction, self.config)
+                    return
+                elif isOptional:
+                    await interaction.response.defer()
+                    self.config[self.optionName] = None
+                    await refreshMessage(self.orig_interaction, self.config)
+                    return
+                raise ValueError
+            except ValueError:
+                await interaction.response.send_message(f"`{reply}` is not a valid string!", ephemeral=True)
 
         optType, isOptional = unwrap_optional(Config.__annotations__[self.optionName])
         if optType is int:
             await interaction.response.send_modal(int_input())
         elif optType is list or get_origin(optType) is list:
             await interaction.response.send_modal(list_input())
+        elif optType is str or get_origin(optType) is str:
+            await interaction.response.send_modal(str_input())
         elif optType is bool:
             await interaction.response.defer()
             self.config[self.optionName] = not self.config.get(self.optionName, False)
