@@ -15,6 +15,7 @@ import swarmfm
 import talk
 import config_edit
 import automod
+import start_fail
 import customtypes as types
 
 
@@ -80,6 +81,7 @@ except FileNotFoundError:
     storage = defaultStorage
 except json.JSONDecodeError:
     logging.fatal("storage could not be read")
+    start_fail.start()
     quit()
 save_storage()
 
