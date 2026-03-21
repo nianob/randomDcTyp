@@ -5,14 +5,23 @@ import asyncio
 import random
 import traceback
 import json
-from typing import Optional
+import ollama
+from typing import Optional, Any, TypedDict, NotRequired, Literal
 
 bot: commands.Bot # This should be overwritten by the importing script
+aiModel: str # This should be overwritten by the importing script
 cards = ['r0', 'r1', 'r1', 'r2', 'r2', 'r3', 'r3', 'r4', 'r4', 'r5', 'r5', 'r6', 'r6', 'r7', 'r7', 'r8', 'r8', 'r9', 'r9', 'rx', 'rx', 'rr', 'rr', 'r+', 'r+', 'g0', 'g1', 'g1', 'g2', 'g2', 'g3', 'g3', 'g4', 'g4', 'g5', 'g5', 'g6', 'g6', 'g7', 'g7', 'g8', 'g8', 'g9', 'g9', 'gx', 'gx', 'gr', 'gr', 'g+', 'g+', 'b0', 'b1', 'b1', 'b2', 'b2', 'b3', 'b3', 'b4', 'b4', 'b5', 'b5', 'b6', 'b6', 'b7', 'b7', 'b8', 'b8', 'b9', 'b9', 'bx', 'bx', 'br', 'br', 'b+', 'b+', 'y0', 'y1', 'y1', 'y2', 'y2', 'y3', 'y3', 'y4', 'y4', 'y5', 'y5', 'y6', 'y6', 'y7', 'y7', 'y8', 'y8', 'y9', 'y9', 'yx', 'yx', 'yr', 'yr', 'y+', 'y+', 'c?', 'c?', 'c?', 'c?', 'c*', 'c*', 'c*', 'c*']
 
+class AiAction(TypedDict):
+    type: Literal["play_card", "draw_card", "skip_to_next_player", "draw_cards"]
+    card: str
+
+class AiResponse(TypedDict):
+    comment: NotRequired[str]
+    action: AiAction
 
 def collect_attrs(obj, visited=None):
-    if not isinstance(obj, (Uno, Player, Card, Settings, Player.DrawButton, Player.AltDrawButton, Player.NextButton, Card.Action, Card.Button, Card.ColorSelector, Settings.setting, Settings.ToggleButton, JoinButton, ReadyButton, LeaveButton, SettingsButton, int, float, str, bool, type(None), list, tuple, set, dict)):
+    if not isinstance(obj, (Uno, Player, AiPlayer, Card, Settings, Player.DrawButton, Player.AltDrawButton, Player.NextButton, Card.Action, Card.Button, Card.ColorSelector, Settings.setting, Settings.ToggleButton, JoinButton, ReadyButton, LeaveButton, SettingsButton, int, float, str, bool, type(None), list, tuple, set, dict)):
         return "<untracked object>"
     if visited is None:
         visited = set()
@@ -111,8 +120,11 @@ class Player():
             self.player.drawnCards = False
             await interaction.response.defer()
             await self.player.send_interaction()
+            for player in self.player.game.gamePlayers:
+                if isinstance(player, AiPlayer):
+                    await player.send_interaction(False)
 
-    def __init__(self, user: discord.Member|discord.User, game: "Uno"):
+    def __init__(self, user: discord.Member|discord.User|discord.ClientUser, game: "Uno"):
         self.user = user
         self.lastInteraction = game.lastInteractions[game.players.index(user)]
         self.game = game
@@ -145,6 +157,7 @@ class Player():
             for player in self.game.gamePlayers:
                 if player.message:
                     await player.message.delete()
+                    player.message = None
             return
         view = discord.ui.View()
         if self.game.draw:
@@ -166,6 +179,129 @@ class Player():
             await self.message.edit(content=f"Your Cards:", view=view)
         elif interaction:
             self.message = await interaction.followup.send(content="Your Cards:", view=view, ephemeral=True)
+
+class AiPlayer(Player):
+    def get_answer_schema(self) -> dict[str, Any]:
+        answer_schema: dict[str, Any] = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "description": "An additional comment (optional)"
+                },
+                "action": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "enum": []
+                        },
+                        "card": {
+                            "enum": [],
+                            "description": "The card to play (ignored in other actions)"
+                        }
+                    },
+                    "required": [
+                        "type",
+                        "card"
+                    ]
+                }
+            },
+            "required": [
+                "action"
+                ]
+            }
+        if self.game.draw:
+            answer_schema["properties"]["action"]["properties"]["type"]["enum"].append("draw_cards")
+        elif self.drawnCards:
+            answer_schema["properties"]["action"]["properties"]["type"]["enum"].append("skip_to_next_player")
+        else:
+            answer_schema["properties"]["action"]["properties"]["type"]["enum"].append("draw_card")
+        for card in self.cards:
+            if not card.useable():
+                continue
+            if not "play_card" in answer_schema["properties"]["action"]["properties"]["type"]["enum"]:
+                answer_schema["properties"]["action"]["properties"]["type"]["enum"].append("play_card")
+            if card.color == "c":
+                for color in ["red", "green", "blue", "yellow"]:
+                    answer_schema["properties"]["action"]["properties"]["card"]["enum"].append(f"{color} {card.symbol}")
+            else:
+                color = {"r": "red", "g": "green", "b": "blue", "y": "yellow"}[card.color]
+                answer_schema["properties"]["action"]["properties"]["card"]["enum"].append(f"{color} {card.symbol}")
+        if not "play_card" in answer_schema["properties"]["action"]["properties"]["type"]["enum"]:
+            answer_schema["properties"]["action"]["properties"]["card"]["enum"].append("null")
+        return answer_schema
+
+    async def send_interaction(self, editGlobalMessage: bool = True, interaction: Optional[discord.Interaction] = None):
+        if self.game.ended:
+            winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
+            await self.game.close(f"{winner.mention} has won the Game!")
+            for player in self.game.gamePlayers:
+                if player.message:
+                    await player.message.delete()
+                    player.message = None
+            return
+        sep = "\n"
+        if not self.game.message:
+            raise ValueError
+        if editGlobalMessage:
+            globalView = discord.ui.View()
+            globalView.add_item(RefreshCardsButton(self.game))
+            await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
+        if self == self.game.gamePlayers[self.game.currentPlayer]:
+            await self.play()
+
+    async def play(self):
+        last = f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}"
+        cards = list(map(lambda x: f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Yellow', 'x': ''}[x.color if x.color in ['r', 'g', 'b', 'y'] else 'x']} {x.symbol}", self.cards))
+        format = self.get_answer_schema()
+        prompt = f"You are currently playing a game of UNO. The last played card is a {last}. You have the following cards: {cards}. What is your next action? Respond with JSON."
+        print(format)
+        response = await ollama.AsyncClient().generate(model=aiModel, prompt=prompt, format=format)
+        print(response.response)
+        await self.interpret_response(json.loads(response.response))
+    
+    async def interpret_response(self, response: AiResponse):
+        action = response['action']
+        if action['type'] == 'play_card':
+            cardInfo = action['card'].split(' ', 1)
+            color = {'red': 'r', 'green': 'g', 'blue': 'b', 'yellow': 'y'}[cardInfo[0]]
+            number = {'0': '0', '1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '🛇': 'x', '⟳': 'r', '+2': '+', 'Color Change': '?', '+4 Color Change': '*'}[cardInfo[1]]
+            card_color = 'c' if number == '?' or number == '*' else color
+            for card in self.cards:
+                if card.id == card_color+number:
+                    if not card.owner:
+                        raise ValueError("Invalid card configuration")
+                    self.drawnCards = False
+                    self.cards.remove(card)
+                    self.game.stack.append(card)
+                    if card_color == 'c':
+                        card.action.execute(color)
+                    else:
+                        card.action.execute()
+                    if self.game.updatedDraw:
+                        for player in self.game.gamePlayers:
+                            await player.send_interaction()
+                    else:
+                        await self.send_interaction()
+                    card.owner = None
+                    return
+            raise ValueError(f"Card '{color+number}' was not found in players Inventory!")
+        elif action['type'] == 'draw_card':
+            self.draw()
+            self.drawnCards = True
+            await self.send_interaction()
+        elif action['type'] == 'skip_to_next_player':
+            self.game.next_player()
+            self.drawnCards = False
+            await self.send_interaction()
+        elif action['type'] == 'draw_cards':
+            for _ in range(self.game.draw):
+                self.draw()
+            self.game.draw = 0
+            self.game.updatedDraw = False
+            self.drawnCards = True
+            for player in self.game.gamePlayers:
+                await player.send_interaction()
 
 class Card():
     class Button(discord.ui.Button):
@@ -195,6 +331,9 @@ class Card():
                         await player.send_interaction()
                 else:
                     await self.card.owner.send_interaction()
+                    for player in self.card.game.gamePlayers:
+                        if isinstance(player, AiPlayer):
+                            await player.send_interaction()
                 self.card.owner = None
                 return
             await interaction.response.defer()
@@ -221,6 +360,9 @@ class Card():
             else:
                 if self.card.owner:
                     await self.card.owner.send_interaction()
+                    for player in self.card.game.gamePlayers:
+                        if isinstance(player, AiPlayer):
+                            await player.send_interaction()
             self.card.owner = None
             
     class Action():
@@ -316,14 +458,15 @@ class Uno():
     def __init__(self, originalInteraction: discord.Interaction):
         self.closeTime = int(((time.time()+630)//60)*60)
         bot.loop.create_task(self.close_lobby())
-        self.players = list[discord.User|discord.Member]()
-        self.lastInteractions = list[discord.Interaction]()
+        self.players = list[discord.User|discord.Member|discord.ClientUser]()
+        self.lastInteractions = list[Optional[discord.Interaction]]()
         self.gamePlayers = list[Player]()
         self.playerReady = dict[int, bool]()
         self.view = discord.ui.View(timeout=600)
         self.view.add_item(JoinButton(self))
         self.view.add_item(ReadyButton(self))
         self.view.add_item(LeaveButton(self))
+        self.view.add_item(BotJoinButton(self))
         self.view.add_item(SettingsButton(self))
         self.startAt = 0
         self.deck = [Card(cardId, None, self) for cardId in cards]
@@ -352,6 +495,14 @@ class Uno():
         self.playerReady[interaction.user.id] = False
         self.startAt = 0
     
+    def addBot(self):
+        if not bot.user:
+            raise ValueError
+        self.players.append(bot.user)
+        self.lastInteractions.append(None)
+        self.playerReady[bot.user.id] = True
+        self.startAt = 0
+    
     @handleCrashes("message")
     async def start(self):
         self.startAt = int(time.time()+15)
@@ -364,13 +515,14 @@ class Uno():
         if self.message:
             await self.message.edit(content = f"{self.creator.display_name} has create a game of Uno!\n\nStarting...", view=None)
         self.running = True
-        self.gamePlayers = [Player(player, self) for player in self.players]
+        self.gamePlayers = [(Player(player, self) if not player.bot else AiPlayer(player, self)) for player in self.players]
         self.currentPlayer = random.randint(0, len(self.gamePlayers)-1)
         self.stack.append(self.deck.pop(0))
         while self.stack[-1].value in ["x", "r", "+", "?", "*"]:
             self.stack.append(self.deck.pop(0))
         for player in self.gamePlayers:
-            player.message = await player.lastInteraction.followup.send("Loading Cards...", ephemeral=True)
+            if player.lastInteraction:
+                player.message = await player.lastInteraction.followup.send("Loading Cards...", ephemeral=True)
             for _ in range(8):
                 player.draw()
         for player in self.gamePlayers:
@@ -475,6 +627,35 @@ class SettingsButton(discord.ui.Button):
                 self.game.settings.message = await interaction.followup.send(self.game.settings.get_message(), view=self.game.settings.view, ephemeral=True)
         else:
             await interaction.response.send_message(f"You are not in the game!", ephemeral=True)
+
+class BotJoinButton(discord.ui.Button):
+    def __init__(self, game: Uno):
+        self.game = game
+        super().__init__(label="Add Bot", style=discord.ButtonStyle.gray)
+
+    @handleCrashes("game.message")
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user == self.game.creator:
+            if len(self.game.players) == 10:
+                await interaction.response.send_message(f"Sorry, but this game is full!", ephemeral=True)
+            else:
+                self.game.addBot()
+                await interaction.response.defer()
+                if self.game.message:
+                    await self.game.message.edit(content=self.game.lobbyMessage())
+            if not self.game.message:
+                return
+            if len(self.game.players) >= 2:
+                if not False in self.game.playerReady.values():
+                    bot.loop.create_task(self.game.start())
+                    await self.game.message.edit(content=self.game.lobbyMessage()+'\nStarting soon...')
+                else:
+                    self.game.startAt = 0
+                    await self.game.message.edit(content=self.game.lobbyMessage())
+            else:
+                await self.game.message.edit(content=self.game.lobbyMessage())
+        else:
+            await interaction.response.send_message(f"Sorry, but only the player who started the Game can do this!", ephemeral=True)
 
 class RefreshCardsButton(discord.ui.Button):
     def __init__(self, game: Uno):

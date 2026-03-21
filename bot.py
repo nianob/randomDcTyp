@@ -221,6 +221,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             await mover.send("Sorry, but you cannot move me.")
 
 uno.bot = bot
+uno.aiModel = config["aiModel"]
 vc.save_storage = save_storage
 vc.storage = storage
 vc.bot = bot
