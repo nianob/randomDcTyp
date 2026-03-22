@@ -556,8 +556,10 @@ class Uno():
                 player.draw()
         await asyncio.gather(*tasks)
         tasks = []
+        tasks.append(self.gamePlayers[0].edit_global())
         for player in self.gamePlayers:
             tasks.append(player.send_interaction())
+        await asyncio.gather(*tasks)
     
     async def send_player_message(self, player: Player | AiPlayer):
         if player.lastInteraction:
@@ -671,26 +673,27 @@ class BotJoinButton(discord.ui.Button):
 
     @handleCrashes("game.message")
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user == self.game.creator:
-            if len(self.game.players) == 10:
-                await interaction.response.send_message(f"Sorry, but this game is full!", ephemeral=True)
-            else:
-                self.game.addBot()
-                await interaction.response.defer()
-                if self.game.message:
-                    await self.game.message.edit(content=self.game.lobbyMessage())
-            if not self.game.message:
-                return
-            if len(self.game.players) >= 2:
-                if not False in self.game.playerReady.values():
-                    bot.loop.create_task(self.game.start())
-                    await self.game.message.edit(content=self.game.lobbyMessage()+'\nStarting soon...')
-                else:
-                    await self.game.message.edit(content=self.game.lobbyMessage())
-            else:
-                await self.game.message.edit(content=self.game.lobbyMessage())
-        else:
+        if interaction.user != self.game.creator:
             await interaction.response.send_message(f"Sorry, but only the player who started the Game can do this!", ephemeral=True)
+            return
+        if len(self.game.players) == 10:
+            await interaction.response.send_message(f"Sorry, but this game is full!", ephemeral=True)
+            return
+        if not bot.user:
+            raise ValueError
+        if bot.user in self.game.players:
+            await interaction.response.send_message(f"I am already in the Game!", ephemeral=True)
+            return
+        await interaction.response.defer()
+        self.game.addBot()
+        if not self.game.message:
+            return
+        if len(self.game.players) >= 2 and not False in self.game.playerReady.values():
+            bot.loop.create_task(self.game.start())
+            await self.game.message.edit(content=self.game.lobbyMessage()+'\nStarting soon...')
+        else:
+            await self.game.message.edit(content=self.game.lobbyMessage())
+            
 
 class RefreshCardsButton(discord.ui.Button):
     def __init__(self, game: Uno):
