@@ -1,27 +1,30 @@
 import discord
 import ollama
 from discord.ext import commands
-from typing import Any
+from typing import Any, Optional
 
 bot: commands.Bot # This should be overwritten by the importing script
 logging: Any # This should be set by the importing script
-aiModel: str # This should be set by the importing script
+aiModel: Optional[str] # This should be set by the importing script
+
+async def get_replied(message: discord.Message) -> list[dict[str, str]]:
+    if not bot.user:
+        raise ValueError
+    converted_message = {"role": "assistant" if message.author.id == bot.user.id else "user", "content": message.content}
+    if not message.reference:
+        return [converted_message]
+    cached = message.reference.cached_message
+    if not message.reference.message_id:
+        raise ValueError
+    if not cached:
+        cached = await message.channel.fetch_message(message.reference.message_id)
+    prev_messages = await get_replied(cached)
+    prev_messages.append(converted_message)
+    return prev_messages
 
 async def on_message(message: discord.Message):
-    async def get_replied(message: discord.Message) -> list[dict[str, str]]:
-        if not bot.user:
-            raise ValueError
-        converted_message = {"role": "assistant" if message.author.id == bot.user.id else "user", "content": message.content}
-        if not message.reference:
-            return [converted_message]
-        cached = message.reference.cached_message
-        if not message.reference.message_id:
-            raise ValueError
-        if not cached:
-            cached = await message.channel.fetch_message(message.reference.message_id)
-        prev_messages = await get_replied(cached)
-        prev_messages.append(converted_message)
-        return prev_messages
+    if not aiModel:
+        return
 
     if not bot.user:
         return

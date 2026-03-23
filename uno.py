@@ -286,15 +286,6 @@ class Player():
                 The message could not be updated.
         """
         if self.game.ended:
-            winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
-            tasks = []
-            tasks.append(self.game.close(f"{winner.mention} has won the Game!"))
-            for player in self.game.gamePlayers:
-                if player.message:
-                    tasks.append(player.message.delete())
-            await asyncio.gather(*tasks)
-            for player in self.game.gamePlayers:
-                player.message = None
             return
         view = discord.ui.View()
         if self.game.draw:
@@ -401,15 +392,6 @@ class AiPlayer(Player):
 
     async def send_interaction(self, interaction: Optional[discord.Interaction] = None):
         if self.game.ended:
-            winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
-            tasks = []
-            tasks.append(self.game.close(f"{winner.mention} has won the Game!"))
-            for player in self.game.gamePlayers:
-                if player.message:
-                    tasks.append(player.message.delete())
-            await asyncio.gather(*tasks)
-            for player in self.game.gamePlayers:
-                player.message = None
             return
         if self == self.game.gamePlayers[self.game.currentPlayer]:
             await self.play()
@@ -876,10 +858,7 @@ class Uno():
                 The message containing wo has won.
         """
         if self.message:
-            try:
-                await self.message.edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
-            except discord.errors.Forbidden: # Token expired
-                await (await self.message.fetch()).edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
+            await self.message.edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
         del self
 
     def next_player(self):
@@ -888,8 +867,20 @@ class Uno():
             self.currentPlayer = (self.currentPlayer+1)%len(self.players)
         else:
             self.currentPlayer = (self.currentPlayer-1)%len(self.players)
-        if 0 in [len(player.cards) for player in self.gamePlayers]:
+        if 0 in [len(player.cards) for player in self.gamePlayers] and not self.ended:
             self.ended = True
+            bot.loop.create_task(self.end_game())
+
+    async def end_game(self):
+        winner = self.players[[len(player.cards) == 0 for player in self.gamePlayers].index(True)]
+        tasks = []
+        for player in self.gamePlayers:
+            if player.message:
+                tasks.append(player.message.delete())
+        for player in self.gamePlayers:
+            player.message = None
+        await asyncio.gather(*tasks)
+        await self.close(f"{winner.mention} has won the Game!")
 
 class JoinButton(discord.ui.Button):
     """The Button for a Player to join the Game"""
