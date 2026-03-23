@@ -1,3 +1,34 @@
+"""A Game of UNO
+
+### About
+This module allows you to run a game of UNO inside discord.
+An AI may be added to the game. The module is mainly designed
+for the randomDcTyp, but should be compatible with other bots
+too. When importing make sure to set `bot` to the `commands.bot`
+and `aiModel` to the LLM you want to have playing. when `aiModel`
+is unset, the function for the bot to play will be disabled. The
+main command group is `UnoCommand` A minimal example, how to
+implement this module in your bot follows.
+
+### Minimal Example
+```
+import discord
+import uno
+from discord.ext import commands
+
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
+
+@bot.event
+async def on_ready():
+    bot.tree.add_command(uno.UnoCommand())
+
+uno.bot = bot
+uno.aiModel = "gemma3:1b"
+
+bot.run("YOUR-BOT-TOKEN")
+```
+"""
+
 import discord
 from discord.ext import commands
 import time
@@ -6,7 +37,11 @@ import random
 import traceback
 import json
 import ollama
-from typing import Optional, Any, TypedDict, NotRequired, Literal
+from typing import Optional, Any, TypedDict, NotRequired, Literal, TypeVar, ParamSpec, Awaitable, Callable
+from types import CoroutineType
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
 
 bot: commands.Bot # This should be overwritten by the importing script
 aiModel: str # This should be overwritten by the importing script
@@ -20,7 +55,21 @@ class AiResponse(TypedDict):
     comment: NotRequired[str]
     action: AiAction
 
-def collect_attrs(obj, visited=None):
+def collect_attrs(obj: Any, visited: Optional[set[int]] = None) -> Any:
+    """Collects the Attributes of an object
+
+    All Attributes of an object are collected and returned as a string.
+    Limited to only python natives and UNO related objects.
+    Objects already listed are replaced with `recursion`+type.
+
+    Args:
+        obj:
+            The object to list the attributes of
+        visited:
+            A set of the ids of already visited objects
+    Returns:
+        A json element containing all properties
+    """
     if not isinstance(obj, (Uno, Player, AiPlayer, Card, Settings, Player.DrawButton, Player.AltDrawButton, Player.NextButton, Card.Action, Card.Button, Card.ColorSelector, Settings.setting, Settings.ToggleButton, JoinButton, ReadyButton, LeaveButton, SettingsButton, int, float, str, bool, type(None), list, tuple, set, dict)):
         return "<untracked object>"
     if visited is None:
@@ -46,31 +95,53 @@ def collect_attrs(obj, visited=None):
     else:
         return repr(obj)
 
-def handleCrashes(pathToGame: str):
+def handleCrashes(pathToGame: str) -> Callable[[Callable[_P, Awaitable[object]]], Callable[_P, CoroutineType]]:
+
+    """Gracefully handle a Crash
+
+    A decorator that catches any Exceptions and sends all
+    the details in discord. The game might be able to continue.
+
+    Args:
+        pathToGame:
+            the Path to the game message, used as the message to reply to
+    """
     varnames = pathToGame.split(".")
-    def decorator(func):
-        async def wrapper(self, *args, **kwargs):
+    def decorator(func: Callable[_P, Awaitable[_T]]) -> Callable[_P, CoroutineType]:
+        async def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_T]:
             try:
-                return await func(self, *args, **kwargs)
+                return await func(*args, **kwargs)
             except KeyboardInterrupt:
                 pass
             except asyncio.exceptions.CancelledError:
                 pass
             except:
                 crash = ''.join(traceback.format_exc())
-                messageObject = self
+                messageObject = args[0]
                 for var in varnames:
                     messageObject = messageObject.__dict__[var]
+                if not isinstance(messageObject, discord.Message):
+                    raise TypeError
                 msg: discord.Message = await messageObject.reply(f"The Game Crashed!\n```\n{crash}```\nSaving variables...")
                 with open("crash.json", "w") as f:
-                    json.dump(collect_attrs(self), f)
+                    json.dump(collect_attrs(args[0]), f)
                 await msg.edit(content=f"The Game Crashed!\n```\n{crash}```\nCheck the variables for further information!", attachments=[discord.File("crash.json")])
         return wrapper
     return decorator
 
 class Player():
+    """A player in a game of UNO"""
+
     class DrawButton(discord.ui.Button):
+        """The Button for a Player to draw a Card"""
+
         def __init__(self, player: "Player"):
+            """The Button for a Player to draw a card.
+
+            Args:
+                player:
+                    The player the Button is for
+            """
             self.player = player
             super().__init__(label="Draw Card", style=discord.ButtonStyle.grey)
         
@@ -86,7 +157,22 @@ class Player():
             await self.player.send_interaction()
     
     class AltDrawButton(discord.ui.Button):
+        """The Button to draw multiple cards
+        
+        When a Player has to draw cards, this button will allow them to do that.
+        Amount for cards to draw can vary.
+        """
+
         def __init__(self, player: "Player"):
+            """The Button to draw multiple cards
+            
+            When a Player has to draw cards, this button will allow them to do that.
+            Amount for cards to draw can vary.
+
+            Args:
+                player:
+                    The player this button is for
+            """
             self.player = player
             super().__init__(label=f"Draw {player.game.draw} Cards", style=discord.ButtonStyle.grey)
         
@@ -108,7 +194,21 @@ class Player():
             await asyncio.gather(*tasks)
     
     class NextButton(discord.ui.Button):
+        """The Button to skip to the next player
+        
+        When a player has already drawn cards this Button will
+        give them the opportunity to skip to the next player.
+        """
         def __init__(self, player: "Player"):
+            """The Button to skip to the next player
+
+            When a player has already drawn cards this Button will
+            give them the opportunity to skip to the next player.
+
+            Args:
+                player:
+                    The player this button is for
+            """
             self.player = player
             super().__init__(label="Next Player", style=discord.ButtonStyle.grey)
         
@@ -130,6 +230,14 @@ class Player():
             await asyncio.gather(*tasks)
 
     def __init__(self, user: discord.Member|discord.User|discord.ClientUser, game: "Uno"):
+        """A player in a game of UNO
+
+        Args:
+            user:
+                The discord user that this Player object represents.
+            game:
+                The game this Player is for
+        """
         self.user = user
         self.lastInteraction = game.lastInteractions[game.players.index(user)]
         self.game = game
@@ -140,6 +248,7 @@ class Player():
         self.message: None|discord.Message = None
     
     def draw(self):
+        """Draw a Card"""
         card = self.game.deck.pop(0)
         card.owner = self
         self.cards.append(card)
@@ -148,14 +257,31 @@ class Player():
             self.game.stack = [self.game.stack[-1]]
     
     async def refreshButtons(self, interaction: discord.Interaction):
+        """Refresh the Players Buttons
+        
+        Args:
+            interaction:
+                The interaction used
+        """
         self.drawCardButton = self.DrawButton(self)
         self.nextPlayerButton = self.NextButton(self)
         for card in self.cards:
             card.refreshButton()
         await self.send_interaction(interaction)
     
-    @handleCrashes("game.message")
     async def send_interaction(self, interaction: Optional[discord.Interaction] = None):
+        """Sends the players cards
+
+        Updates the players message to reflect current cards.
+        If no message exists, sends a new one. Does not refresh
+        the buttons. Can also detect, when a player has won the
+        Game and end it accordingly.
+
+        Args:
+            interaction:
+                The interaction used.
+                Optional and only used, when a new message needs to be sent.
+        """
         if self.game.ended:
             winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
             await self.game.close(f"{winner.mention} has won the Game!")
@@ -179,6 +305,15 @@ class Player():
             self.message = await interaction.followup.send(content="Your Cards:", view=view, ephemeral=True)
     
     async def edit_global(self):
+        """Updates the global message
+
+        Updates the gobal message explaining what card is currently the top on
+        the stack, who is currently playing, etc.
+
+        Raises:
+            ValueError:
+                There is no global message defined
+        """
         if not self.game.message:
             raise ValueError
         sep = "\n"
@@ -193,7 +328,17 @@ class Player():
 
 
 class AiPlayer(Player):
+    """Object representing a player, but played by AI"""
+
     def get_answer_schema(self) -> dict[str, Any]:
+        """Returns the answer schema
+
+        Returns a schema which the AI needs to respond in accordance with.
+        Specifies exactly, what the AI can currently do. Formatted in JSON
+
+        Returns:
+            The JSON schema
+        """
         answer_schema: dict[str, Any] = {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "properties": {
@@ -259,6 +404,13 @@ class AiPlayer(Player):
             await self.play()
 
     async def play(self):
+        """Let the AI play
+        
+        The AI will execute it's move. Sends a Prompt to ollama
+        in order to figure out, what the AI schould do. If only
+        one action is valid, simulates the AI thinking, but doesn't
+        ask the LLM.
+        """
         last = f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}"
         cards = list(map(lambda x: f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Yellow', 'x': ''}[x.color if x.color in ['r', 'g', 'b', 'y'] else 'x']} {x.symbol}", self.cards))
         format = self.get_answer_schema()
@@ -279,6 +431,15 @@ class AiPlayer(Player):
             await self.interpret_response(json.loads(response.response))
     
     async def interpret_response(self, response: AiResponse):
+        """Iterprets the response of the LLM
+        
+        Args:
+            response:
+                The response of the LLM, formatted as a dict according to the AiResponse schema
+        Raises:
+            ValueError:
+                The AI tried to play a card that doesn't exist or it doesn't have
+        """
         action = response['action']
         if action['type'] == 'play_card':
             cardInfo = action['card'].split(' ', 1)
@@ -327,8 +488,22 @@ class AiPlayer(Player):
             await asyncio.gather(*tasks)
 
 class Card():
+    """A Card in the Game of UNO"""
+
     class Button(discord.ui.Button):
+        """The Button corresponding to the Card in a game of UNO"""
+
         def __init__(self, color:discord.ButtonStyle, symbol:str, card:'Card'):
+            """The Button corresponding to the Card in a game of UNO
+            
+            Args:
+                color:
+                    The color of the Card (in form of a discord.ButtonStyle)
+                symbol:
+                    The text displayed on the Button
+                card:
+                    The corresponding Card object
+            """
             self.card = card
             super().__init__(label=symbol, style=color)
         
@@ -370,7 +545,25 @@ class Card():
             await interaction.followup.send("Please select a color!", view=view, ephemeral=True)
     
     class ColorSelector(discord.ui.Button):
+        """A Color Selecor Button
+        
+        A Color Selector Button for cards that can
+        be multiple colors, eg. Color Changer Cards
+        """
         def __init__(self, color:discord.ButtonStyle, colorStr:str, card:'Card'):
+            """A Color Selecor Button
+
+            A Color Selector Button for cards that can
+            be multiple colors, eg. Color Changer Card
+
+            Args:
+                color:
+                    The Color of the Button
+                colorStr:
+                    A single symbol representing the color of the Button
+                card:
+                    The corresponding Card object
+            """
             self.card = card
             self.colorStr = colorStr
             super().__init__(label='.', style=color)
@@ -395,32 +588,48 @@ class Card():
             self.card.owner = None
             
     class Action():
+        """The action a card can execute"""
+
         def __init__(self, id:str, card:'Card'):
+            """The action a card can execute
+            
+            Args:
+                id:
+                    The two-symobol identifier of the card
+                card:
+                    The corresponding Card object
+            """
             self.card = card
             self.execute = {'x': self.skip, 'r': self.reverse, '+': self.draw2, '?': self.colorchange, '*': self.draw4}.get(id[1:], self.default)
 
         def default(self):
+            """The default behaviror"""
             self.card.game.next_player()
         
         def draw2(self):
+            """The next player needs to draw 2 cards"""
             self.card.game.draw += 2
             self.card.game.updatedDraw = True
             self.card.game.next_player()
         
         def draw4(self, color: str):
+            """The next player needs to draw 4 cards"""
             self.colorchange(color)
             self.card.game.draw += 4
             self.card.game.updatedDraw = True
         
         def colorchange(self, color: str):
+            """A specific color must be laid after a colorchage"""
             self.card.selectedColor = color
             self.card.game.next_player()
         
         def skip(self):
+            """One player is skipped"""
             self.card.game.next_player()
             self.card.game.next_player()
         
         def reverse(self):
+            """The direction of the game is flipped, if only two players, act the same as `skip()`"""
             if len(self.card.game.gamePlayers) == 2:
                 self.skip()
                 return
@@ -428,6 +637,16 @@ class Card():
             self.card.game.next_player()
 
     def __init__(self, id:str, owner: Player|None, game: 'Uno'):
+        """A Card in the Game of UNO
+        
+        Args:
+            id:
+                A two-symbol string, representig what card it is
+            owner:
+                The Player who owns the card
+            game:
+                The Game this card is in
+        """
         self.game = game
         self.owner = owner
         self.id = id
@@ -441,6 +660,12 @@ class Card():
     
     @property
     def useable(self) -> bool:
+        """If the Card is currently playable or not
+        
+        Raises:
+            ValueError:
+                There is no player associated with the Card
+        """
         if not self.owner:
             raise ValueError
         lastCard = self.owner.game.stack[-1]
@@ -451,15 +676,29 @@ class Card():
         return self.color == "c" or self.color == lastCard.selectedColor
     
     def refreshButton(self):
+        """Refeshes the Button of this Card"""
         self.button = self.Button(self.buttonStyle, self.symbol, self)
 
 class Settings():
+    """The Settings of a Game of UNO"""
     class setting():
+        """Individual settings, saved for the session"""
         plus4onplus4 = True
         plus4onplus2 = True
     
     class ToggleButton(discord.ui.Button):
+        """A button allowing the User to toggle a setting"""
         def __init__(self, settingsmenu: "Settings", setting: str, number: int):
+            """A button allowing the User to toggle a setting
+            
+            Args:
+                settingsmenu:
+                    The Settings object this Button is for
+                setting:
+                    The name of the setting in `Settings.setting` this button is for
+                number:
+                    The number of the setting used in the Message
+            """
             self.settingsmenu = settingsmenu
             self.setting = setting
             super().__init__(label=str(number), style=discord.ButtonStyle.blurple)
@@ -472,6 +711,12 @@ class Settings():
                 await self.settingsmenu.message.edit(content=self.settingsmenu.get_message())
 
     def __init__(self, game: "Uno"):
+        """The Settings of a Game of UNO
+        
+        Args:
+            game:
+                The Game those Settings are for
+        """
         self.game = game
         self.message: None|discord.Message = None
         self.view = discord.ui.View()
@@ -479,13 +724,23 @@ class Settings():
         self.view.add_item(self.ToggleButton(self, "plus4onplus2", 2))
     
     def visualstate(self, value: bool) -> str:
+        """Turns a bool into `ON` or `OFF`"""
         return "ON" if value else "OFF"
     
     def get_message(self) -> str:
+        """Returns the full settings message"""
         return f"Settings:\n1: `+4 on +4`: `{self.visualstate(self.setting.plus4onplus4)}`\n2: `+4 on +2`: `{self.visualstate(self.setting.plus4onplus2)}`\n\nUse the Buttons to toggle the settings!"
 
 class Uno():
+    """The game of UNO"""
+
     def __init__(self, originalInteraction: discord.Interaction):
+        """The game of UNO
+        
+        Args:
+            originalInteraction:
+                The interaction starting the game
+        """
         self.closeTime = int(((time.time()+630)//60)*60)
         bot.loop.create_task(self.close_lobby())
         self.players = list[discord.User|discord.Member|discord.ClientUser]()
@@ -514,18 +769,26 @@ class Uno():
         self.updatedDraw = False
     
     def lobbyMessage(self) -> str:
+        """returns the Message when the gane hasn't started yet"""
         seperator = '\n- '
         readyString = '(Ready)'
         emptyString = ''
         return f"{self.creator.display_name} has created a game of Uno!\nPlayers:\n- {seperator.join([f'{user.mention} {readyString if self.playerReady[user.id] else emptyString}' for user in self.players])}\n-# ({len(self.players)}/10)\n-# The lobby will close <t:{self.closeTime}:R>"
 
     def addUser(self, interaction: discord.Interaction):
+        """Adds a User to the Game
+        
+        Args:
+            interaction:
+                The users interaction
+        """
         self.players.append(interaction.user)
         self.lastInteractions.append(interaction)
         self.playerReady[interaction.user.id] = False
         self.startAt = 0
     
     def addBot(self):
+        """Adds a Bot to the Game"""
         if not bot.user:
             raise ValueError
         self.players.append(bot.user)
@@ -534,6 +797,11 @@ class Uno():
     
     @handleCrashes("message")
     async def start(self):
+        """Starts the game
+
+        Starts the game after all the Players have pressed Ready.
+        Can be interrupted by changing `self.startAt` back to `0`.
+        """
         self.startAt = int(time.time()+15)
         while time.time() < self.startAt:
             await asyncio.sleep(1-time.time()%1)
@@ -562,17 +830,31 @@ class Uno():
         await asyncio.gather(*tasks)
     
     async def send_player_message(self, player: Player | AiPlayer):
+        """Sends the Player his message with the Cards
+        
+        Args:
+            player:
+                The Player to send the Message to
+        """
         if player.lastInteraction:
             player.message = await player.lastInteraction.followup.send("Loading Cards...", ephemeral=True)
 
     @handleCrashes("message")
     async def close_lobby(self):
+        """Close the Game before it has started due to inactivity"""
         await asyncio.sleep(self.closeTime-time.time())
         if not self.running:
             await self.close('The game closed due to inactivity!')
+        del self
 
     @handleCrashes("message")
     async def close(self, message: str):
+        """Close a Game after it has ended
+        
+        Args:
+            message:
+                The message containing wo has won.
+        """
         if self.message:
             try:
                 await self.message.edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
@@ -581,6 +863,7 @@ class Uno():
         del self
 
     def next_player(self):
+        """End the current players turn and start the next ones"""
         if not self.reversed:
             self.currentPlayer = (self.currentPlayer+1)%len(self.players)
         else:
@@ -589,7 +872,15 @@ class Uno():
             self.ended = True
 
 class JoinButton(discord.ui.Button):
+    """The Button for a Player to join the Game"""
+
     def __init__(self, game: Uno):
+        """The Button for a Player to join the Game
+        
+        Args:
+            game:
+                The corresponding Game
+        """
         self.game = game
         super().__init__(label="Join Game", style=discord.ButtonStyle.green)
 
@@ -606,7 +897,15 @@ class JoinButton(discord.ui.Button):
                 await self.game.message.edit(content=self.game.lobbyMessage())
 
 class LeaveButton(discord.ui.Button):
+    """The Button for a Player to leave the Game"""
+
     def __init__(self, game: Uno):
+        """The Button for a Player to leave the Game
+        
+        Args:
+            game:
+                The corresponding Game
+        """
         self.game = game
         super().__init__(label="Leave Game", style=discord.ButtonStyle.red)
 
@@ -630,7 +929,15 @@ class LeaveButton(discord.ui.Button):
                 await self.game.close('The game cloesed because everyone Left!')
 
 class ReadyButton(discord.ui.Button):
+    """The Button for a Player to toggle his ready state"""
+
     def __init__(self, game: Uno):
+        """The Button for a Player to toggle his ready state
+
+        Args:
+            game:
+                The corresponding Game
+        """
         self.game = game
         super().__init__(label="Ready", style=discord.ButtonStyle.blurple)
 
@@ -653,7 +960,15 @@ class ReadyButton(discord.ui.Button):
             await interaction.response.send_message(f"You are not in the game!", ephemeral=True)
 
 class SettingsButton(discord.ui.Button):
+    """The Button to open the Settings of a Game"""
+
     def __init__(self, game: Uno):
+        """The Button to open the Settings of a Game
+
+        Args:
+            game:
+                The corresponding Game
+        """
         self.game = game
         super().__init__(label="Settings", style=discord.ButtonStyle.gray)
     
@@ -667,7 +982,15 @@ class SettingsButton(discord.ui.Button):
             await interaction.response.send_message(f"You are not in the game!", ephemeral=True)
 
 class BotJoinButton(discord.ui.Button):
+    """The Button to add the Bot to a Game"""
+
     def __init__(self, game: Uno):
+        """The Button to add the Bot to a Game
+
+        Args:
+            game:
+                The corresponding Game
+        """
         self.game = game
         super().__init__(label="Add Bot", style=discord.ButtonStyle.gray)
 
@@ -696,7 +1019,15 @@ class BotJoinButton(discord.ui.Button):
             
 
 class RefreshCardsButton(discord.ui.Button):
+    """The Button to refresh the Cards of a Player"""
+
     def __init__(self, game: Uno):
+        """The Button to refresh the Cards of a Player
+        
+        Args:
+            game:
+                The corresponding Game
+        """
         self.game = game
         super().__init__(label="Refresh your Message", style=discord.ButtonStyle.gray)
     
@@ -709,11 +1040,14 @@ class RefreshCardsButton(discord.ui.Button):
         await self.game.gamePlayers[self.game.players.index(interaction.user)].refreshButtons(interaction)
 
 class UnoCommand(discord.app_commands.Group):
+    """The command group for UNO"""
+
     def __init__(self):
         super().__init__(name="uno", description="UNO")
 
     @discord.app_commands.command(name="start", description="Start a game of UNO!")
     async def start(self, interaction: discord.Interaction):
+        """The command to open a Game of UNO"""
         game = Uno(interaction)
         game.addUser(interaction)
         await interaction.response.send_message("Opening Game...", delete_after=0.0, ephemeral=True)
