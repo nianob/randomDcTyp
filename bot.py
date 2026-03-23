@@ -15,6 +15,8 @@ import swarmfm
 import talk
 import config_edit
 import automod
+import ai
+import start_fail
 import customtypes as types
 
 
@@ -55,7 +57,7 @@ if "--write-pid" in sys.argv:
 if not os.path.exists("config.json") and os.path.exists("config_template.jsonc"):
     raise FileNotFoundError("Please create config.json from config_template.jsonc before launching this bot.")
 with open("config.json", "r") as f:
-    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None, "disabled": None}
+    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None, "aiModel": None, "disabled": None}
     config: types.Config = insertToTypedDict(json.load(f), defaultConfig)
 
 owner = config["owner"]
@@ -80,6 +82,7 @@ except FileNotFoundError:
     storage = defaultStorage
 except json.JSONDecodeError:
     logging.fatal("storage could not be read")
+    start_fail.start()
     quit()
 save_storage()
 
@@ -182,6 +185,7 @@ async def on_message(message: discord.Message):
     if message.author == bot.user:
         return
     await automod.handleChatMessage(message)
+    await ai.on_message(message)
     channel = message.channel.id
     if not channel in wordle.ongoing.keys():
         return
@@ -219,6 +223,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             await mover.send("Sorry, but you cannot move me.")
 
 uno.bot = bot
+uno.aiModel = config["aiModel"]
 vc.save_storage = save_storage
 vc.storage = storage
 vc.bot = bot
@@ -233,6 +238,9 @@ talk.storage = storage
 config_edit.config = config
 automod.save_storage = save_storage
 automod.storage = storage
+ai.bot = bot
+ai.logging = logging
+ai.aiModel = config["aiModel"]
 
 # Start the bot
 with open("bot_token.hidden.txt", "r") as f:
