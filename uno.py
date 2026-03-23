@@ -44,7 +44,7 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 bot: commands.Bot # This should be overwritten by the importing script
-aiModel: str # This should be overwritten by the importing script
+aiModel: Optional[str] # This should be overwritten by the importing script
 cards = ['r0', 'r1', 'r1', 'r2', 'r2', 'r3', 'r3', 'r4', 'r4', 'r5', 'r5', 'r6', 'r6', 'r7', 'r7', 'r8', 'r8', 'r9', 'r9', 'rx', 'rx', 'rr', 'rr', 'r+', 'r+', 'g0', 'g1', 'g1', 'g2', 'g2', 'g3', 'g3', 'g4', 'g4', 'g5', 'g5', 'g6', 'g6', 'g7', 'g7', 'g8', 'g8', 'g9', 'g9', 'gx', 'gx', 'gr', 'gr', 'g+', 'g+', 'b0', 'b1', 'b1', 'b2', 'b2', 'b3', 'b3', 'b4', 'b4', 'b5', 'b5', 'b6', 'b6', 'b7', 'b7', 'b8', 'b8', 'b9', 'b9', 'bx', 'bx', 'br', 'br', 'b+', 'b+', 'y0', 'y1', 'y1', 'y2', 'y2', 'y3', 'y3', 'y4', 'y4', 'y5', 'y5', 'y6', 'y6', 'y7', 'y7', 'y8', 'y8', 'y9', 'y9', 'yx', 'yx', 'yr', 'yr', 'y+', 'y+', 'c?', 'c?', 'c?', 'c?', 'c*', 'c*', 'c*', 'c*']
 
 class AiAction(TypedDict):
@@ -95,9 +95,8 @@ def collect_attrs(obj: Any, visited: Optional[set[int]] = None) -> Any:
     else:
         return repr(obj)
 
-def handleCrashes(pathToGame: str) -> Callable[[Callable[_P, Awaitable[object]]], Callable[_P, CoroutineType]]:
-
-    """Gracefully handle a Crash
+def handleCrashes(pathToGame: str) -> Callable[[Callable[_P, Awaitable[_T]]], Callable[_P, "CoroutineType[Any, Any, Optional[_T]]"]]:
+    """Gracefully handle an Exception
 
     A decorator that catches any Exceptions and sends all
     the details in discord. The game might be able to continue.
@@ -107,7 +106,7 @@ def handleCrashes(pathToGame: str) -> Callable[[Callable[_P, Awaitable[object]]]
             the Path to the game message, used as the message to reply to
     """
     varnames = pathToGame.split(".")
-    def decorator(func: Callable[_P, Awaitable[_T]]) -> Callable[_P, CoroutineType]:
+    def decorator(func: Callable[_P, Awaitable[_T]]) -> Callable[_P, "CoroutineType[Any, Any, Optional[_T]]"]:
         async def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_T]:
             try:
                 return await func(*args, **kwargs)
@@ -122,7 +121,7 @@ def handleCrashes(pathToGame: str) -> Callable[[Callable[_P, Awaitable[object]]]
                     messageObject = messageObject.__dict__[var]
                 if not isinstance(messageObject, discord.Message):
                     raise TypeError
-                msg: discord.Message = await messageObject.reply(f"The Game Crashed!\n```\n{crash}```\nSaving variables...")
+                msg: discord.Message = await messageObject.reply(f"An Error occured!\n```\n{crash}```\nSaving variables...")
                 with open("crash.json", "w") as f:
                     json.dump(collect_attrs(args[0]), f)
                 await msg.edit(content=f"The Game Crashed!\n```\n{crash}```\nCheck the variables for further information!", attachments=[discord.File("crash.json")])
@@ -275,20 +274,27 @@ class Player():
         Updates the players message to reflect current cards.
         If no message exists, sends a new one. Does not refresh
         the buttons. Can also detect, when a player has won the
-        Game and end it accordingly.
+        Game and end it accordingly. If the message is to old to edit,
+        will send a new one.
 
         Args:
             interaction:
                 The interaction used.
                 Optional and only used, when a new message needs to be sent.
+        Raises:
+            RuntimeError:
+                The message could not be updated.
         """
         if self.game.ended:
             winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
-            await self.game.close(f"{winner.mention} has won the Game!")
+            tasks = []
+            tasks.append(self.game.close(f"{winner.mention} has won the Game!"))
             for player in self.game.gamePlayers:
                 if player.message:
-                    await player.message.delete()
-                    player.message = None
+                    tasks.append(player.message.delete())
+            await asyncio.gather(*tasks)
+            for player in self.game.gamePlayers:
+                player.message = None
             return
         view = discord.ui.View()
         if self.game.draw:
@@ -300,9 +306,19 @@ class Player():
         for card in self.cards:
             view.add_item(card.button)
         if self.message:
-            await self.message.edit(content=f"Your Cards:", view=view)
+            try:
+                await self.message.edit(content=f"Your Cards:", view=view)
+            except discord.HTTPException as e:
+                if not e.code == 50027: # Invalid Webhook Token
+                    raise e
+                if self.lastInteraction:
+                    self.message = await self.lastInteraction.followup.send(content="Your Cards:", view=view, ephemeral=True)
+                else:
+                    raise RuntimeError("The message could not be updated")
         elif interaction:
             self.message = await interaction.followup.send(content="Your Cards:", view=view, ephemeral=True)
+        else:
+            raise RuntimeError("The message could not be updated")
     
     async def edit_global(self):
         """Updates the global message
@@ -319,12 +335,7 @@ class Player():
         sep = "\n"
         globalView = discord.ui.View()
         globalView.add_item(RefreshCardsButton(self.game))
-        try:
-            await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
-        except discord.errors.Forbidden: # Token Expired
-            self.game.message = await self.game.message.fetch()
-            await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
-            print("Refreshed Game Message")
+        await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
 
 
 class AiPlayer(Player):
@@ -410,14 +421,22 @@ class AiPlayer(Player):
         in order to figure out, what the AI schould do. If only
         one action is valid, simulates the AI thinking, but doesn't
         ask the LLM.
+
+        Raises:
+            ValueError:
+                There is no AI model to send the requests to
+            ResponseError:
+                The request could not be fulfilled by the AI
         """
+        if aiModel is None:
+            raise ValueError("AI model not given")
         last = f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}"
         cards = list(map(lambda x: f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Yellow', 'x': ''}[x.color if x.color in ['r', 'g', 'b', 'y'] else 'x']} {x.symbol}", self.cards))
         format = self.get_answer_schema()
         if len(format["properties"]["action"]["properties"]["type"]["enum"]) == 1:
             # Only 1 action available, no need to ask AI.
             # Action cannot be "play_card", as there always is either "draw_cards", "skip_to_next_player" or "draw_card" available
-            await asyncio.sleep(1) # Additional delay in order simulate AI playing
+            await asyncio.sleep(2) # Additional delay in order simulate AI playing
             await self.interpret_response({
                 "action": {
                     "type": format["properties"]["action"]["properties"]["type"]["enum"][0],
@@ -751,7 +770,8 @@ class Uno():
         self.view.add_item(JoinButton(self))
         self.view.add_item(ReadyButton(self))
         self.view.add_item(LeaveButton(self))
-        self.view.add_item(BotJoinButton(self))
+        if aiModel:
+            self.view.add_item(BotJoinButton(self))
         self.view.add_item(SettingsButton(self))
         self.startAt = 0
         self.deck = [Card(cardId, None, self) for cardId in cards]
