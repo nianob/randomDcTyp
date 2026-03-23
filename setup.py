@@ -2,7 +2,7 @@ import sys
 import subprocess
 
 print("Installing dependencies...")
-subprocess.run([sys.executable, "-m", "pip", "install", "discord.py", "discord[voice]", "regex"])
+subprocess.run([sys.executable, "-m", "pip", "install", "discord.py", "discord[voice]", "regex", "ollama"])
 
 # bot_token.hidden.txt
 print("Please go to the discord developer portal (https://discord.com/developers/applications) and create or select a bot.")

@@ -9,5 +9,6 @@
     "pointBringingVcs": null, // list of all talks, that can bring Vc Points
     "altRole": null, // the ID of the role for alt accounts
     "afkChannel": null, // the ID of AFK Channel
+    "aiModel": null, // the AI to use in ollama
     "disabled": null // if the bot is disabled and shouldnt start. Defaults to false
 }
