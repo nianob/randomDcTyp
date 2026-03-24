@@ -463,7 +463,7 @@ class AiPlayer(Player):
                     self.cards.remove(card)
                     self.game.stack.append(card)
                     if card_color == 'c':
-                        self.game.actions.append(f"{self.user.display_name} played a {card.name} and set the color to { {'red': 'r', 'green': 'g', 'blue': 'b', 'yellow': 'y'}[color]}")
+                        self.game.actions.append(f"{self.user.display_name} played a {card.name} and set the color to { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[color]}")
                         card.action.execute(color)
                     else:
                         self.game.actions.append(f"{self.user.display_name} played a {card.name}")
@@ -590,7 +590,7 @@ class Card():
         @handleCrashes("card.game.message")
         async def callback(self, interaction):
             await interaction.response.edit_message(delete_after=0.0)
-            self.card.game.actions.append(f"{interaction.user.display_name} played a {self.card.name} and set the color to { {'red': 'r', 'green': 'g', 'blue': 'b', 'yellow': 'y'}[self.colorStr]}")
+            self.card.game.actions.append(f"{interaction.user.display_name} played a {self.card.name} and set the color to { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.colorStr]}")
             self.card.action.execute(self.colorStr)
             tasks = []
             if self.card.game.updatedDraw:
