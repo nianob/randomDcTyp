@@ -37,6 +37,7 @@ import random
 import traceback
 import json
 import ollama
+import io
 from typing import Optional, Any, TypedDict, NotRequired, Literal, TypeVar, ParamSpec, Awaitable, Callable
 from types import CoroutineType
 
@@ -151,9 +152,13 @@ class Player():
                 await interaction.response.send_message("It's not your Turn!", ephemeral=True, delete_after=5)
                 return
             await interaction.response.defer()
+            self.player.game.actions.append(f"{self.player.user.display_name} drew a card")
             self.player.draw()
             self.player.drawnCards = True
-            await self.player.send_interaction()
+            tasks = []
+            tasks.append(self.player.edit_global())
+            tasks.append(self.player.send_interaction())
+            await asyncio.gather(*tasks)
     
     class AltDrawButton(discord.ui.Button):
         """The Button to draw multiple cards
@@ -182,12 +187,14 @@ class Player():
                 await interaction.response.send_message("It's not your Turn!", ephemeral=True, delete_after=5)
                 return
             await interaction.response.defer()
+            self.player.game.actions.append(f"{self.player.user.display_name} drew {self.player.game.draw} cards")
             for _ in range(self.player.game.draw):
                 self.player.draw()
             self.player.game.draw = 0
             self.player.game.updatedDraw = False
             self.player.drawnCards = True
             tasks = []
+            tasks.append(self.player.edit_global())
             for player in self.player.game.gamePlayers:
                 tasks.append(player.send_interaction())
             await asyncio.gather(*tasks)
@@ -218,6 +225,7 @@ class Player():
                 await interaction.response.send_message("It's not your Turn!", ephemeral=True)
                 return
             await interaction.response.defer()
+            self.player.game.actions.append(f"{self.player.user.display_name} skipped to the next player")
             self.player.game.next_player()
             self.player.drawnCards = False
             tasks = []
@@ -286,6 +294,14 @@ class Player():
                 The message could not be updated.
         """
         if self.game.ended:
+            winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
+            tasks = []
+            tasks.append(self.game.close(f"{winner.mention} has won the Game!"))
+            for player in self.game.gamePlayers:
+                if player.message:
+                    tasks.append(player.message.delete())
+                player.message = None
+            await asyncio.gather(*tasks)
             return
         view = discord.ui.View()
         if self.game.draw:
@@ -326,7 +342,7 @@ class Player():
         sep = "\n"
         globalView = discord.ui.View()
         globalView.add_item(RefreshCardsButton(self.game))
-        await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
+        await self.game.message.edit(content=f"{self.game.creator.display_name} has created a game of Uno!\n\n```\n{sep.join(self.game.actions[-5:])}\n```\nCurrent Card: { {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}\nIt's {self.game.gamePlayers[self.game.currentPlayer].user.mention}s turn.\n{sep.join([f'<a:alarm:1373945129332768830> {player.user.display_name} has only 1 card left! <a:alarm:1373945129332768830>' for player in self.game.gamePlayers if len(player.cards) == 1])}", view=globalView)
 
 
 class AiPlayer(Player):
@@ -392,6 +408,14 @@ class AiPlayer(Player):
 
     async def send_interaction(self, interaction: Optional[discord.Interaction] = None):
         if self.game.ended:
+            winner = self.game.players[[len(player.cards) == 0 for player in self.game.gamePlayers].index(True)]
+            tasks = []
+            tasks.append(self.game.close(f"{winner.mention} has won the Game!"))
+            for player in self.game.gamePlayers:
+                if player.message:
+                    tasks.append(player.message.delete())
+                player.message = None
+            await asyncio.gather(*tasks)
             return
         if self == self.game.gamePlayers[self.game.currentPlayer]:
             await self.play()
@@ -455,8 +479,10 @@ class AiPlayer(Player):
                     self.cards.remove(card)
                     self.game.stack.append(card)
                     if card_color == 'c':
+                        self.game.actions.append(f"{self.user.display_name} played a {card.name} and set the color to { {'red': 'r', 'green': 'g', 'blue': 'b', 'yellow': 'y'}[color]}")
                         card.action.execute(color)
                     else:
+                        self.game.actions.append(f"{self.user.display_name} played a {card.name}")
                         card.action.execute()
                     tasks = []
                     if self.game.updatedDraw:
@@ -470,20 +496,27 @@ class AiPlayer(Player):
                     return
             raise ValueError(f"Card '{color+number}' was not found in players Inventory!")
         elif action['type'] == 'draw_card':
+            self.game.actions.append(f"{self.user.display_name} drew a card")
             self.draw()
             self.drawnCards = True
-            await self.send_interaction()
+            tasks = []
+            tasks.append(self.edit_global())
+            tasks.append(self.send_interaction())
+            await asyncio.gather(*tasks)
         elif action['type'] == 'skip_to_next_player':
+            self.game.actions.append(f"{self.user.display_name} skipped to the next player")
             self.game.next_player()
             self.drawnCards = False
             await self.edit_global()
         elif action['type'] == 'draw_cards':
+            self.game.actions.append(f"{self.user.display_name} drew {self.game.draw} cards")
             for _ in range(self.game.draw):
                 self.draw()
             self.game.draw = 0
             self.game.updatedDraw = False
             self.drawnCards = True
             tasks = []
+            tasks.append(self.edit_global())
             for player in self.game.gamePlayers:
                 tasks.append(player.send_interaction())
             await asyncio.gather(*tasks)
@@ -524,6 +557,7 @@ class Card():
             self.card.owner.cards.remove(self.card)
             self.card.game.stack.append(self.card)
             if self.card.color != 'c':
+                self.card.game.actions.append(f"{interaction.user.display_name} played a {self.card.name}")
                 self.card.action.execute()
                 tasks = []
                 if self.card.game.updatedDraw:
@@ -572,6 +606,7 @@ class Card():
         @handleCrashes("card.game.message")
         async def callback(self, interaction):
             await interaction.response.edit_message(delete_after=0.0)
+            self.card.game.actions.append(f"{interaction.user.display_name} played a {self.card.name} and set the color to { {'red': 'r', 'green': 'g', 'blue': 'b', 'yellow': 'y'}[self.colorStr]}")
             self.card.action.execute(self.colorStr)
             tasks = []
             if self.card.game.updatedDraw:
@@ -679,6 +714,11 @@ class Card():
     def refreshButton(self):
         """Refeshes the Button of this Card"""
         self.button = self.Button(self.buttonStyle, self.symbol, self)
+    
+    @property
+    def name(self) -> str:
+        """The Name of the Card"""
+        return {"r": "Red ", "g": "Green ", "b": "Blue ", "y": "Gray ", "c": ""}[self.color]+self.symbol
 
 class Settings():
     """The Settings of a Game of UNO"""
@@ -769,6 +809,7 @@ class Uno():
         self.creator = originalInteraction.user
         self.settings = Settings(self)
         self.updatedDraw = False
+        self.actions: list[str] = []
     
     def lobbyMessage(self) -> str:
         """returns the Message when the gane hasn't started yet"""
@@ -820,6 +861,7 @@ class Uno():
         self.stack.append(self.deck.pop(0))
         while self.stack[-1].value in ["x", "r", "+", "?", "*"]:
             self.stack.append(self.deck.pop(0))
+        self.actions.append(f"The game starts with a {self.stack[-1].name}")
         for player in self.gamePlayers:
             tasks.append(self.send_player_message(player))
             for _ in range(8):
@@ -858,7 +900,18 @@ class Uno():
                 The message containing wo has won.
         """
         if self.message:
-            await self.message.edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
+            if self.actions:
+                history = io.BytesIO(f"\n".join(self.actions).encode())
+                history.seek(0)
+                try:
+                    await self.message.edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None, attachments=[discord.File(history, "history.txt")])
+                except discord.errors.Forbidden: # Token expired
+                    await (await self.message.fetch()).edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None, attachments=[discord.File(history, "history.txt")])
+            else:
+                try:
+                    await self.message.edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
+                except discord.errors.Forbidden: # Token expired
+                    await (await self.message.fetch()).edit(content=f"{self.creator.display_name} has created a game of Uno!\n\n{message}", view=None)
         del self
 
     def next_player(self):
@@ -867,20 +920,8 @@ class Uno():
             self.currentPlayer = (self.currentPlayer+1)%len(self.players)
         else:
             self.currentPlayer = (self.currentPlayer-1)%len(self.players)
-        if 0 in [len(player.cards) for player in self.gamePlayers] and not self.ended:
+        if 0 in [len(player.cards) for player in self.gamePlayers]:
             self.ended = True
-            bot.loop.create_task(self.end_game())
-
-    async def end_game(self):
-        winner = self.players[[len(player.cards) == 0 for player in self.gamePlayers].index(True)]
-        tasks = []
-        for player in self.gamePlayers:
-            if player.message:
-                tasks.append(player.message.delete())
-        for player in self.gamePlayers:
-            player.message = None
-        await asyncio.gather(*tasks)
-        await self.close(f"{winner.mention} has won the Game!")
 
 class JoinButton(discord.ui.Button):
     """The Button for a Player to join the Game"""
