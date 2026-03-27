@@ -414,13 +414,13 @@ class AiPlayer(Player):
 
         Raises:
             ValueError:
-                There is no AI model to send the requests to
+                - There is no AI model to send the requests to
+                - The bot has no user associated
             ResponseError:
                 The request could not be fulfilled by the AI
         """
         if aiModel is None:
             raise ValueError("AI model not given")
-        last = f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Gray'}[self.game.stack[-1].selectedColor if self.game.stack[-1].selectedColor in ['r', 'g', 'b', 'y'] else self.game.stack[-1].color]} {self.game.stack[-1].symbol}"
         cards = list(map(lambda x: f"{ {'r': 'Red', 'g': 'Green', 'b': 'Blue', 'y': 'Yellow', 'x': ''}[x.color if x.color in ['r', 'g', 'b', 'y'] else 'x']} {x.symbol}", self.cards))
         format = self.get_answer_schema()
         if len(format["properties"]["action"]["properties"]["type"]["enum"]) == 1:
@@ -435,7 +435,18 @@ class AiPlayer(Player):
             })
         else:
             # More than 1 action available, Ask AI
-            prompt = f"You are currently playing a game of UNO. The last played card is a {last}. You have the following cards: {cards}. What is your next action? Respond with JSON."
+            if not bot.user:
+                raise ValueError("bot.user does not exist")
+            sep = "\n"
+            prompt = f"""
+            You are currently playing a game of UNO. Here are the latest actions:
+            
+            {sep.join(self.game.actions[-10:]).replace(bot.user.display_name, "You")}
+            
+            Color changes can be played on any card.
+            You have the following cards: {cards}.
+            What is your next action? Respond with JSON.
+            """
             response = await ollama.AsyncClient().generate(model=aiModel, prompt=prompt, format=format)
             await self.interpret_response(json.loads(response.response))
     
