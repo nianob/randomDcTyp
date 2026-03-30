@@ -38,6 +38,7 @@ import traceback
 import json
 import ollama
 import io
+import logging
 from typing import Optional, Any, TypedDict, NotRequired, Literal, TypeVar, ParamSpec, Awaitable, Callable
 from types import CoroutineType
 
@@ -426,7 +427,7 @@ class AiPlayer(Player):
         if len(format["properties"]["action"]["properties"]["type"]["enum"]) == 1:
             # Only 1 action available, no need to ask AI.
             # Action cannot be "play_card", as there always is either "draw_cards", "skip_to_next_player" or "draw_card" available
-            await asyncio.sleep(2) # Additional delay in order simulate AI playing
+            await asyncio.sleep(3) # Additional delay in order simulate AI playing
             await self.interpret_response({
                 "action": {
                     "type": format["properties"]["action"]["properties"]["type"]["enum"][0],
@@ -437,17 +438,29 @@ class AiPlayer(Player):
             # More than 1 action available, Ask AI
             if not bot.user:
                 raise ValueError("bot.user does not exist")
+            if not self.game.reversed:
+                nextPlayer = self.game.gamePlayers[(self.game.currentPlayer+1)%len(self.game.players)]
+                afterNextPlayer = self.game.gamePlayers[(self.game.currentPlayer+2)%len(self.game.players)]
+            else:
+                nextPlayer = self.game.gamePlayers[(self.game.currentPlayer-1)%len(self.game.players)]
+                afterNextPlayer = self.game.gamePlayers[(self.game.currentPlayer-2)%len(self.game.players)]
             sep = "\n"
+            oneCardInfo1 = "The player after you only has one card left.\n" if len(nextPlayer.cards) == 1 else ""
+            oneCardInfo2 = "The player after the next player only has one card left.\n" if len(afterNextPlayer.cards) == 1 and len(self.game.players) > 2 else ""
             prompt = f"""
             You are currently playing a game of UNO. Here are the latest actions:
             
-            {sep.join(self.game.actions[-10:]).replace(bot.user.display_name, "You")}
+            {sep.join(self.game.actions[-10:]).replace(bot.user.display_name, "You").replace("Gray", "Yellow")}
             
             Color changes can be played on any card.
             You have the following cards: {cards}.
-            What is your next action? Respond with JSON.
+            {oneCardInfo1}{oneCardInfo2}What is your next action? Respond with JSON.
             """
+            minThinkingEnd = time.time() + 3
             response = await ollama.AsyncClient().generate(model=aiModel, prompt=prompt, format=format)
+            thinkingEnd = time.time()
+            if thinkingEnd < minThinkingEnd:
+                await asyncio.sleep(minThinkingEnd-thinkingEnd)
             await self.interpret_response(json.loads(response.response))
     
     async def interpret_response(self, response: AiResponse):
@@ -460,6 +473,7 @@ class AiPlayer(Player):
             ValueError:
                 The AI tried to play a card that doesn't exist or it doesn't have
         """
+        logging.info(f"LLM played: {response}")
         action = response['action']
         if action['type'] == 'play_card':
             cardInfo = action['card'].split(' ', 1)
