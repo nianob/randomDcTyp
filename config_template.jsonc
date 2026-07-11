@@ -10,5 +10,7 @@
     "altRole": null, // the ID of the role for alt accounts
     "afkChannel": null, // the ID of AFK Channel
     "aiModel": null, // the AI to use in ollama
+    "ipAddress": null, // the IP Address of the Bot, used to send notification on change
+    "notifyOnIpChange": null, // Enable notifying the owner when the IP address changes
     "disabled": null // if the bot is disabled and shouldnt start. Defaults to false
 }

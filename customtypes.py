@@ -8,6 +8,8 @@ class Config(TypedDict):
     altRole: Optional[int]
     afkChannel: Optional[int]
     aiModel: Optional[str]
+    ipAddress: Optional[str]
+    notifyOnIpChange: Optional[bool]
     disabled: Optional[bool]
 
 class ShopItemDict(TypedDict):
