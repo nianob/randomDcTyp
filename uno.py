@@ -461,7 +461,10 @@ class AiPlayer(Player):
             thinkingEnd = time.time()
             if thinkingEnd < minThinkingEnd:
                 await asyncio.sleep(minThinkingEnd-thinkingEnd)
-            await self.interpret_response(json.loads(response.response))
+            response_content = response.response
+            if response_content is None:
+                raise ValueError("Empty Response")
+            await self.interpret_response(json.loads(response_content))
     
     async def interpret_response(self, response: AiResponse):
         """Iterprets the response of the LLM
