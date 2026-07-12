@@ -2,14 +2,17 @@ import discord
 import copy
 import json
 import regex
+import requests
 import ast
 import os
 import sys
-from typing import get_origin, get_args, Callable, Any
+from typing import get_origin, get_args, Callable, Any, Optional
 from customtypes import Config
+from discord.ext import commands
 from utils import text_input
 
 config: Config
+bot: commands.Bot
 configFormatter: Callable = lambda conf: "\n".join(map(lambda x: f"{x[0]}: {x[1]}", conf.items()))
 
 def unwrap_optional(t: Any) -> tuple[Any, bool]:
@@ -29,6 +32,19 @@ def unwrap_optional(t: Any) -> tuple[Any, bool]:
         return non_none, True
 
     return t, False
+
+async def notify_on_ip_change():
+    currentIp: str = requests.get('https://api.ipify.org').content.decode('utf8')
+    if config["ipAddress"] == currentIp:
+        return
+    oldIp: Optional[str] = config["ipAddress"]
+    config["ipAddress"] = currentIp
+    with open("config.json", "w") as f:
+        json.dump(config, f)
+    if not config["notifyOnIpChange"]:
+        return
+    user = await bot.fetch_user(config["owner"])
+    await user.send(f"Info: Ip Address Changed: `{oldIp}` -> `{currentIp}`")
 
 async def refreshMessage(orig_interaction: discord.Interaction, config: Config):
     await orig_interaction.edit_original_response(content=configFormatter(config))

@@ -57,7 +57,7 @@ if "--write-pid" in sys.argv:
 if not os.path.exists("config.json") and os.path.exists("config_template.jsonc"):
     raise FileNotFoundError("Please create config.json from config_template.jsonc before launching this bot.")
 with open("config.json", "r") as f:
-    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None, "aiModel": None, "disabled": None}
+    defaultConfig: types.Config = {"owner": 0, "dedicatedServer": None, "ownerRole": None, "pointBringingVcs": None, "altRole": None, "afkChannel": None, "aiModel": None, "ipAddress": None, "notifyOnIpChange": None, "disabled": None}
     config: types.Config = insertToTypedDict(json.load(f), defaultConfig)
 
 owner = config["owner"]
@@ -176,6 +176,7 @@ async def on_ready():
             logging.warning(f"Server {config['dedicatedServer']} Not Found")
         
         await talk.finish_init()
+        await config_edit.notify_on_ip_change()
 
         bot.loop.create_task(wordle.close_idle_games())
     logging.info(f"Logged in as {bot.user} and ready to accept commands.")
@@ -235,6 +236,7 @@ swarmfm.bot = bot
 talk.bot = bot
 talk.save_storage = save_storage
 talk.storage = storage
+config_edit.bot = bot
 config_edit.config = config
 automod.save_storage = save_storage
 automod.storage = storage
